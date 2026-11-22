@@ -58,7 +58,9 @@ export function scoreItem(item: Item, today: string, areas: Area[]): ScoredItem 
     } else {
       const u = Math.max(0, 30 - 3 * daysToStart)
       score += u
-      if (daysToDue <= 7) reasons.push(`Vence en ${daysToDue} días`)
+      if (item.prepDays > 0 && daysToStart <= 7) {
+        reasons.push(`Hay que empezar en ${daysToStart === 1 ? '1 día' : `${daysToStart} días`} (necesita ${item.prepDays} de preparación)`)
+      } else if (daysToDue <= 7) reasons.push(`Vence en ${daysToDue} días`)
     }
   }
 

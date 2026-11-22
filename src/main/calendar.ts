@@ -1,4 +1,4 @@
-import ical from 'node-ical'
+import ical, { type VEvent } from 'node-ical'
 import { readFile } from 'node:fs/promises'
 import type { CalendarEvent } from '@shared/types'
 
@@ -8,7 +8,7 @@ export function parseIcs(text: string, sourceId: string, from: Date, to: Date): 
   const out: CalendarEvent[] = []
 
   for (const key of Object.keys(data)) {
-    const ev = data[key] as ical.VEvent
+    const ev = data[key] as VEvent
     if (!ev || ev.type !== 'VEVENT' || !ev.start) continue
     if ((ev as { status?: string }).status === 'CANCELLED') continue
     const start = new Date(ev.start as unknown as Date)

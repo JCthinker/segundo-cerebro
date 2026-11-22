@@ -14,6 +14,7 @@ import type {
   Source,
   SourceType
 } from '@shared/types'
+import { decrypt, encrypt } from './secrets'
 
 let db: Database.Database
 
@@ -266,7 +267,7 @@ export function deleteSource(id: string): void {
 type McpRow = { id: string; name: string; config_json: string; enabled: number }
 export function listMcpServers(): McpServer[] {
   return (db.prepare('SELECT * FROM mcp_servers ORDER BY name').all() as McpRow[]).map((r) => ({
-    id: r.id, name: r.name, config: JSON.parse(r.config_json), enabled: !!r.enabled
+    id: r.id, name: r.name, config: JSON.parse(decrypt(r.config_json)), enabled: !!r.enabled
   }))
 }
 export function upsertMcpServer(s: Omit<McpServer, 'id'> & { id?: string }): McpServer {
@@ -274,7 +275,7 @@ export function upsertMcpServer(s: Omit<McpServer, 'id'> & { id?: string }): Mcp
   db.prepare(
     `INSERT INTO mcp_servers(id, name, config_json, enabled) VALUES(?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET name = excluded.name, config_json = excluded.config_json, enabled = excluded.enabled`
-  ).run(id, s.name, JSON.stringify(s.config), s.enabled ? 1 : 0)
+  ).run(id, s.name, encrypt(JSON.stringify(s.config)), s.enabled ? 1 : 0)
   return listMcpServers().find((x) => x.id === id)!
 }
 export function deleteMcpServer(id: string): void {

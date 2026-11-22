@@ -1,0 +1,204 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-page: var(--page);
+  --color-panel: var(--panel);
+  --color-raised: var(--raised);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-hover: var(--hover);
+  --color-selected: var(--selected);
+  --color-clay: var(--clay);
+  --color-clay-ink: var(--clay-ink);
+  --color-accent: var(--accent);
+  --color-danger: var(--danger);
+  --color-danger-bg: var(--danger-bg);
+  --color-warning: var(--warning);
+  --color-warning-bg: var(--warning-bg);
+  --color-success: var(--success);
+  --color-success-bg: var(--success-bg);
+  --color-info-bg: var(--info-bg);
+  --font-voice: ui-serif, 'Iowan Old Style', Georgia, serif;
+}
+
+:root {
+  --page: #faf9f5;
+  --panel: #f3f1ea;
+  --raised: #ffffff;
+  --line: rgb(31 30 29 / 0.12);
+  --line-strong: rgb(31 30 29 / 0.24);
+  --ink: #1f1e1d;
+  --muted: #5e5d59;
+  --faint: #8f8e88;
+  --hover: rgb(31 30 29 / 0.05);
+  --selected: rgb(31 30 29 / 0.08);
+  --clay: #c96442;
+  --clay-ink: #ffffff;
+  --accent: #2f6fb3;
+  --danger: #a32d2d;
+  --danger-bg: #fcebeb;
+  --warning: #854f0b;
+  --warning-bg: #faeeda;
+  --success: #3b6d11;
+  --success-bg: #eaf3de;
+  --info-bg: #e6f1fb;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page: #1f1e1d;
+    --panel: #262624;
+    --raised: #30302e;
+    --line: rgb(250 249 245 / 0.1);
+    --line-strong: rgb(250 249 245 / 0.2);
+    --ink: #f5f4ef;
+    --muted: #b7b5ad;
+    --faint: #85837c;
+    --hover: rgb(250 249 245 / 0.06);
+    --selected: rgb(250 249 245 / 0.1);
+    --clay: #d97757;
+    --accent: #85b7eb;
+    --danger: #f09595;
+    --danger-bg: #501313;
+    --warning: #fac775;
+    --warning-bg: #412402;
+    --success: #97c459;
+    --success-bg: #173404;
+    --info-bg: #042c53;
+    color-scheme: dark;
+  }
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.drag {
+  -webkit-app-region: drag;
+}
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+@layer base {
+  button {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: default;
+  }
+  input,
+  textarea,
+  select {
+    font: inherit;
+    color: inherit;
+  }
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Editor de notas (TipTap) */
+.tiptap {
+  outline: none;
+  min-height: 50vh;
+  font-size: 15px;
+  line-height: 1.7;
+}
+.tiptap > * + * {
+  margin-top: 0.5em;
+}
+.tiptap h1 {
+  font-size: 1.6em;
+  font-weight: 600;
+  margin-top: 1em;
+}
+.tiptap h2 {
+  font-size: 1.3em;
+  font-weight: 600;
+  margin-top: 1em;
+}
+.tiptap h3 {
+  font-size: 1.1em;
+  font-weight: 600;
+}
+.tiptap ul {
+  list-style: disc;
+  padding-left: 1.4em;
+}
+.tiptap ol {
+  list-style: decimal;
+  padding-left: 1.4em;
+}
+.tiptap ul[data-type='taskList'] {
+  list-style: none;
+  padding-left: 0.2em;
+}
+.tiptap ul[data-type='taskList'] li {
+  display: flex;
+  gap: 0.5em;
+  align-items: flex-start;
+}
+.tiptap ul[data-type='taskList'] li > label {
+  margin-top: 0.3em;
+}
+.tiptap blockquote {
+  border-left: 3px solid var(--line-strong);
+  padding-left: 0.9em;
+  color: var(--muted);
+}
+.tiptap code {
+  background: var(--hover);
+  border-radius: 4px;
+  padding: 0.1em 0.3em;
+  font-size: 0.9em;
+}
+.tiptap p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--faint);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* Markdown de Mi flujo en vista previa */
+.md h1 {
+  font-size: 1.5em;
+  font-weight: 600;
+  margin: 0.2em 0 0.6em;
+}
+.md h2 {
+  font-size: 1.1em;
+  font-weight: 600;
+  margin: 1.4em 0 0.4em;
+}
+.md p,
+.md li {
+  line-height: 1.7;
+}
+.md ul {
+  list-style: disc;
+  padding-left: 1.3em;
+}
+.md ol {
+  list-style: decimal;
+  padding-left: 1.3em;
+}
