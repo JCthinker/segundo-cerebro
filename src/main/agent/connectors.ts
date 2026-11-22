@@ -2,6 +2,7 @@ import { query, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
 import { CLAUDE_AI_PREFIX, serverKey, serverOf } from '@shared/permissions'
 import type { ClaudeConnector } from '@shared/types'
 import { getSettings } from '../settings'
+import { claudeExecutable } from './client'
 
 /**
  * Conexiones de la cuenta de claude.ai (Gmail, Google Drive, Notion…).
@@ -29,7 +30,7 @@ export async function listClaudeConnectors(env: Record<string, string | undefine
     async function* idle(): AsyncGenerator<SDKUserMessage> {
       await new Promise<void>((r) => (release = r))
     }
-    const q = query({ prompt: idle(), options: { tools: [], settingSources: [], persistSession: false, env } })
+    const q = query({ prompt: idle(), options: { tools: [], settingSources: [], persistSession: false, env, ...claudeExecutable() } })
     try {
       // Las conexiones aparecen y se conectan pasados unos segundos: esperamos a que se asienten.
       let status = await q.mcpServerStatus()

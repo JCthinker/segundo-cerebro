@@ -1,8 +1,10 @@
+import { app } from 'electron'
+import { join } from 'node:path'
 import { query, type CanUseTool, type EffortLevel, type McpServerConfig, type Query, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
 import type { AiStatus } from '@shared/types'
 import { serverKey } from '@shared/permissions'
 import { getApiKey, getSettings } from '../settings'
-import { connectorToolAllowed, isConnectorName, isConnectorTool, knownConnectorNames } from './connectors'
+import { connectorToolAllowed, isConnectorTool, knownConnectorNames, listClaudeConnectors } from './connectors'
 
 export interface AgentEvent {
   type: 'text' | 'tool'
@@ -51,6 +53,17 @@ export function agentEnv(): Record<string, string | undefined> {
   return env
 }
 
+/**
+ * En la app instalada, el ejecutable de Claude Code va fuera del paquete asar
+ * (no se puede ejecutar desde dentro).
+ */
+export function claudeExecutable(): { pathToClaudeCodeExecutable?: string } {
+  if (!app.isPackaged) return {}
+  return {
+    pathToClaudeCodeExecutable: join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', '@anthropic-ai', `claude-agent-sdk-${process.platform}-${process.arch}`, 'claude')
+  }
+}
+
 /** Por defecto solo se permiten las herramientas internas de la app. */
 const internalOnly: CanUseTool = async (name, input) =>
   name.startsWith('mcp__cerebro__')
@@ -69,6 +82,8 @@ export async function runAgent(o: RunAgentOptions): Promise<RunAgentResult> {
       : []
   // Sin conexiones permitidas, Claude Code no las carga. Con alguna, las demás se quitan.
   if (!allowed.length) env.ENABLE_CLAUDEAI_MCP_SERVERS = 'false'
+  // Para quitar las demás conexiones hay que saber cómo se llaman (se guarda en caché 10 min).
+  if (allowed.length && !knownConnectorNames().length) await listClaudeConnectors(env).catch(() => undefined)
   const disallowedTools = knownConnectorNames()
     .filter((n) => !allowed.includes(n))
     .map((n) => `mcp__${serverKey(n)}`)
@@ -105,6 +120,7 @@ export async function runAgent(o: RunAgentOptions): Promise<RunAgentResult> {
       maxTurns: o.maxTurns ?? 12,
       effort: o.effort ?? 'medium',
       env,
+      ...claudeExecutable(),
       abortController: o.abortController,
       ...(o.outputSchema ? { outputFormat: { type: 'json_schema' as const, schema: o.outputSchema } } : {})
     }
@@ -126,16 +142,13 @@ export async function runAgent(o: RunAgentOptions): Promise<RunAgentResult> {
   }
 }
 
+/**
+ * Espera a que las conexiones permitidas estén listas. (No usar toggleMcpServer para apagar
+ * las demás: Claude Code guarda ese cambio en ~/.claude.json y afectaría al usuario fuera de la app.)
+ */
 async function waitForConnectors(q: Query, allowed: string[]): Promise<void> {
-  const off = new Set<string>()
   for (let i = 0; i < 30; i++) {
     const status = await q.mcpServerStatus()
-    for (const st of status) {
-      if (isConnectorName(st.name) && !allowed.includes(st.name) && st.status !== 'disabled' && !off.has(st.name)) {
-        off.add(st.name)
-        await q.toggleMcpServer(st.name, false).catch(() => undefined)
-      }
-    }
     const mine = status.filter((st) => allowed.includes(st.name))
     if (mine.length === allowed.length && mine.every((st) => st.status !== 'pending')) return
     await new Promise((r) => setTimeout(r, 500))
