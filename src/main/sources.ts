@@ -6,6 +6,7 @@ import * as db from './db'
 import { loadIcs, parseIcs } from './calendar'
 import { dataChanged } from './events'
 import { userMcpServers } from './agent/app-mcp'
+import { connectorLabel, isConnectorName } from './agent/connectors'
 import { baseSystem } from './agent/context'
 import { friendlyError, markAiFailure, markAiOk, runAgent } from './agent/client'
 import { extractToInbox, ITEMS_SCHEMA, saveProposals, type Extracted } from './agent/extract'
@@ -53,8 +54,8 @@ export async function syncMcpSource(source: Source): Promise<number> {
   try {
     const r = await runAgent({
       system: baseSystem(MCP_PULL_ROLE),
-      prompt: `Herramienta: ${server}\nQué buscar: ${instructions}\n\nYa conocido:\n${known || '(nada)'}`,
-      mcpServers: userMcpServers([server]),
+      prompt: `Herramienta: ${isConnectorName(server) ? connectorLabel(server) : server}\nQué buscar: ${instructions}\n\nYa conocido:\n${known || '(nada)'}`,
+      ...(isConnectorName(server) ? { connectors: [server] } : { mcpServers: userMcpServers([server]) }),
       // Solo lectura: cualquier escritura se rechaza sin preguntar.
       canUseTool: async (toolName, input) =>
         isReadOnlyTool(toolName)
@@ -65,7 +66,7 @@ export async function syncMcpSource(source: Source): Promise<number> {
       maxTurns: 15
     })
     markAiOk()
-    const n = saveProposals((r.structured as { items: Extracted[] } | null)?.items ?? [], 'mcp', `${server}`)
+    const n = saveProposals((r.structured as { items: Extracted[] } | null)?.items ?? [], 'mcp', isConnectorName(server) ? connectorLabel(server) : server)
     db.markSourceSynced(source.id, null)
     dataChanged('items')
     return n

@@ -1,6 +1,6 @@
 import type { CanUseTool } from '@anthropic-ai/claude-agent-sdk'
 import { randomUUID } from 'node:crypto'
-import { decideToolMode, parsePermissions, serverOf, shortToolName } from '@shared/permissions'
+import { decideToolMode, parsePermissions, serverLabel, serverOf, shortToolName } from '@shared/permissions'
 import type { ApprovalRequest, RunLogEntry } from '@shared/types'
 import * as db from '../db'
 import { emit } from '../events'
@@ -29,7 +29,8 @@ export function makeGate(runId: string, opts: { draftsOnly: boolean; log: (e: Ru
   return async (toolName, input, { signal }) => {
     const { mode, reason } = decideToolMode(toolName, rules, { draftsOnly: opts.draftsOnly })
     const at = new Date().toISOString()
-    const label = `${serverOf(toolName) ?? 'claude'} · ${shortToolName(toolName)}`
+    const server = serverOf(toolName)
+    const label = `${server ? serverLabel(server) : 'claude'} · ${shortToolName(toolName)}`
 
     if (mode === 'auto') return { behavior: 'allow', updatedInput: input }
 
@@ -48,7 +49,7 @@ export function makeGate(runId: string, opts: { draftsOnly: boolean; log: (e: Ru
     }
 
     // mode === 'ask'
-    const req: ApprovalRequest = { id: randomUUID(), runId, toolName, serverName: serverOf(toolName), input }
+    const req: ApprovalRequest = { id: randomUUID(), runId, toolName, serverName: server ? serverLabel(server) : null, input }
     const approved = await new Promise<boolean>((resolve) => {
       pending.set(req.id, resolve)
       signal.addEventListener('abort', () => answerApproval(req.id, false), { once: true })

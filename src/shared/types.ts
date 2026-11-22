@@ -126,7 +126,18 @@ export interface Settings {
   model: string
   briefHour: number // 0-23, -1 = desactivado
   useClaudeCodeConnections: boolean
+  /** Conexiones de la cuenta de claude.ai (p. ej. «claude.ai Gmail») que la app puede usar. */
+  claudeConnectors: string[]
   onboarded: boolean
+}
+
+/** Conexión de tu cuenta de claude.ai (Gmail, Google Drive, Notion…), disponible vía Claude Code. */
+export interface ClaudeConnector {
+  name: string // «claude.ai Gmail»
+  label: string // «Gmail»
+  status: string // connected | needs-auth | failed | pending
+  tools: number
+  enabled: boolean
 }
 
 export interface AiStatus {

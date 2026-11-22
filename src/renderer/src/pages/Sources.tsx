@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import type { ActionRun, AiStatus, McpServer, McpServerConfigJson, Source } from '@shared/types'
+import type { ActionRun, AiStatus, ClaudeConnector, McpServer, McpServerConfigJson, Settings, Source } from '@shared/types'
 import { call, useAction, useData } from '../api'
-import { Button, Card, Empty, ErrorNote, Field, Icon, inputCls, Modal, PageHeader, Pill, SectionLabel, textareaCls } from '../components/ui'
+import { Button, Card, Empty, ErrorNote, Field, Icon, inputCls, Modal, PageHeader, Pill, SectionLabel, Spinner, textareaCls } from '../components/ui'
 import { useNav } from '../nav'
 
 /** Plantillas para conectar herramientas. Son un punto de partida: revisa la documentación de cada proveedor. */
@@ -47,6 +47,17 @@ const CATALOG: { name: string; label: string; icon: Parameters<typeof Icon>[0]['
     pull: 'Issues asignados a mí en el ciclo actual'
   }
 ]
+
+/** Qué leer por defecto y qué regla de permisos proponer para cada conexión de la cuenta de Claude. */
+const CONNECTOR_HINTS: Record<string, { pull: string; rule?: string }> = {
+  Gmail: {
+    pull: 'Correos de los últimos 3 días donde me piden algo, me ponen una fecha o yo prometo algo. Ignora newsletters, notificaciones automáticas y promociones.',
+    rule: 'gmail: solo borrador'
+  },
+  'Google Drive': { pull: 'Documentos compartidos conmigo o con comentarios para mí en los últimos 3 días donde me piden algo' },
+  Notion: { pull: 'Tareas asignadas a mí con fecha en las próximas 2 semanas' },
+  'Google Calendar': { pull: 'Reuniones de los próximos 7 días donde tengo que preparar o enviar algo' }
+}
 
 export function Sources({ ai }: { ai: AiStatus | null }) {
   const { go } = useNav()
@@ -113,6 +124,8 @@ export function Sources({ ai }: { ai: AiStatus | null }) {
         </p>
         <ErrorNote>{addIcs.error || sync.error}</ErrorNote>
       </Card>
+
+      <ClaudeConnectors onPull={setPullFor} />
 
       <SectionLabel right={<Button size="sm" variant="ghost" onClick={() => setEditing({ name: '', config: { type: 'http', url: '' }, enabled: true })}><Icon name="plus" /> Personalizada</Button>}>
         Herramientas (MCP): Claude las usa para leer y para resolver
@@ -196,6 +209,94 @@ export function Sources({ ai }: { ai: AiStatus | null }) {
   )
 }
 
+function ClaudeConnectors({ onPull }: { onPull: (s: Partial<Source>) => void }) {
+  const { data: settings } = useData<Settings>('settings.get', [], ['mcp'])
+  const { data: list, error, reload } = useData<ClaudeConnector[]>('connectors.list', [], ['mcp'])
+  const [suggestRule, setSuggestRule] = useState<string | null>(null)
+  const refresh = useAction(async () => {
+    await call('connectors.list', true)
+    reload()
+  })
+  const toggle = useAction(async (c: ClaudeConnector) => {
+    const r = await call<{ hasRule: boolean }>('connectors.toggle', c.name, !c.enabled)
+    const rule = CONNECTOR_HINTS[c.label]?.rule
+    setSuggestRule(!c.enabled && !r.hasRule && rule ? rule : null)
+  })
+  const addRule = useAction(async (rule: string) => {
+    await call('workflow.appendRule', 'Permisos', rule)
+    setSuggestRule(null)
+  })
+  if (settings?.aiMode === 'api-key') return null
+
+  return (
+    <>
+      <SectionLabel
+        right={
+          <Button size="sm" variant="ghost" busy={refresh.busy} onClick={() => refresh.run()}>
+            <Icon name="refresh" /> Volver a buscar
+          </Button>
+        }
+      >
+        De tu cuenta de Claude
+      </SectionLabel>
+      <Card className="px-4">
+        <p className="pt-3 text-[12.5px] text-muted">
+          Las conexiones que tienes en claude.ai (Ajustes → Conectores). Solo las que actives aquí puede usarlas la app, y siempre con los permisos de Mi flujo.
+        </p>
+        {!list && !error ? (
+          <div className="flex items-center gap-2 py-3 text-[13px] text-muted">
+            <Spinner /> Buscando tus conexiones…
+          </div>
+        ) : null}
+        {error ? <ErrorNote>{error}</ErrorNote> : null}
+        {list && !list.length ? <p className="py-3 text-[13px] text-muted">No hay conexiones en tu cuenta. Añádelas en claude.ai → Ajustes → Conectores.</p> : null}
+        <div className="pt-1">
+          {list?.map((c) => {
+            const ok = c.status === 'connected'
+            return (
+              <div key={c.name} className="flex items-center gap-2 border-b border-line py-2.5 last:border-0">
+                <Icon name="plug" className={c.enabled && ok ? 'text-success' : 'text-faint'} />
+                <div className="min-w-0 flex-1">
+                  <div className="text-[13px] font-medium">{c.label}</div>
+                  <div className="text-[12px] text-faint">
+                    {ok ? `${c.tools} herramientas` : c.status === 'needs-auth' ? 'Hay que volver a iniciar sesión en claude.ai → Ajustes → Conectores' : 'No responde ahora mismo'}
+                  </div>
+                </div>
+                {c.enabled && ok ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => onPull({ kind: 'mcp', name: `Desde ${c.label}`, config: { server: c.name, instructions: CONNECTOR_HINTS[c.label]?.pull ?? 'Lo que me afecte de los últimos 3 días' }, enabled: true })}
+                  >
+                    Traer a la bandeja
+                  </Button>
+                ) : null}
+                <label className="flex items-center gap-1.5 text-[12.5px] text-muted">
+                  <input type="checkbox" checked={c.enabled} disabled={toggle.busy || (!ok && !c.enabled)} onChange={() => toggle.run(c)} /> Usar en la app
+                </label>
+              </div>
+            )
+          })}
+        </div>
+        {suggestRule ? (
+          <div className="mb-3 flex items-center gap-2 rounded-lg bg-info-bg p-3 text-[12.5px] text-accent">
+            <span className="flex-1">
+              Para empezar con calma: ¿añado a Mi flujo la regla <code>{suggestRule}</code>? Claude preparará borradores pero no enviará nada.
+            </span>
+            <Button size="sm" busy={addRule.busy} onClick={() => addRule.run(suggestRule)}>
+              Añadir regla
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setSuggestRule(null)}>
+              No
+            </Button>
+          </div>
+        ) : null}
+        <ErrorNote>{toggle.error || refresh.error || addRule.error}</ErrorNote>
+      </Card>
+    </>
+  )
+}
+
 function Tile({ icon, title, sub, onClick, muted }: { icon: Parameters<typeof Icon>[0]['name']; title: string; sub: string; onClick?: () => void; muted?: boolean }) {
   return (
     <button disabled={!onClick} onClick={onClick} className={`rounded-xl border border-line bg-raised p-3 text-left ${onClick ? 'hover:border-line-strong' : ''} ${muted ? 'opacity-60' : ''}`}>
@@ -272,7 +373,7 @@ function PullEditor({ source, onClose }: { source: Partial<Source>; onClose: () 
   return (
     <Modal onClose={onClose}>
       <div className="space-y-3 p-5">
-        <h2 className="text-[16px] font-semibold">Traer a la bandeja desde {String(source.config?.server)}</h2>
+        <h2 className="text-[16px] font-semibold">Traer a la bandeja desde {String(source.config?.server).replace(/^claude\.ai\s+/i, '')}</h2>
         <p className="text-[13px] text-muted">Claude usará solo herramientas de lectura y dejará lo que encuentre en la bandeja para que lo confirmes.</p>
         <Field label="Qué buscar">
           <textarea rows={3} className={textareaCls} value={instructions} onChange={(e) => setInstructions(e.target.value)} />

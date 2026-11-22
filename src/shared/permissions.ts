@@ -68,6 +68,25 @@ export function serverOf(toolName: string): string | null {
   return m ? m[1] : null
 }
 
+/** Prefijo que Claude Code da a las conexiones de la cuenta de claude.ai: mcp__claude_ai_Gmail__… */
+export const CLAUDE_AI_PREFIX = 'claude_ai_'
+
+/** Nombre corto y legible del servidor: «claude_ai_Gmail» → «Gmail». */
+export function serverLabel(server: string): string {
+  return server.startsWith(CLAUDE_AI_PREFIX) ? server.slice(CLAUDE_AI_PREFIX.length).replace(/_/g, ' ') : server
+}
+
+/** Clave de servidor en los nombres de herramienta: «claude.ai Gmail» → «claude_ai_Gmail». */
+export function serverKey(name: string): string {
+  return name.replace(/[^a-zA-Z0-9_-]/g, '_')
+}
+
+/** Herramientas que solo crean o editan un borrador (no envían nada): create_draft, update_draft… */
+export function isDraftTool(toolName: string): boolean {
+  const w = words(shortToolName(toolName))
+  return w.includes('draft') && !w.some((x) => ['send', 'delete', 'remove', 'trash', 'publish'].includes(x))
+}
+
 export function shortToolName(toolName: string): string {
   const m = toolName.match(/^mcp__.+?__(.+)$/)
   return m ? m[1] : toolName
@@ -83,8 +102,10 @@ function ruleMatches(pattern: string, toolName: string): boolean {
   const short = shortToolName(toolName)
   const p = pattern.trim()
   const candidates = [toolName, short]
-  if (server) candidates.push(`${server}.${short}`, `${server}/${short}`)
-  if (server && !/[.*/_]/.test(p) && p.toLowerCase() === server.toLowerCase()) return true
+  // «gmail» también vale para la conexión de claude.ai «claude_ai_Gmail».
+  const names = server ? [...new Set([server, serverLabel(server).replace(/\s+/g, '_')])] : []
+  for (const n of names) candidates.push(`${n}.${short}`, `${n}/${short}`)
+  if (!/[.*/_]/.test(p) && names.some((n) => p.toLowerCase().replace(/\s+/g, '_') === n.toLowerCase())) return true
   const re = globToRegex(p)
   return candidates.some((c) => re.test(c))
 }
@@ -126,6 +147,14 @@ export function decideToolMode(
       : { mode: 'ask', reason: 'Escribe o envía algo: necesita tu OK' }
   }
 
+  // «Solo borrador» limita lo que escribe o envía; leer sigue permitido.
+  if (decided.mode === 'draft' && isReadOnlyTool(toolName)) {
+    return { mode: 'auto', reason: 'Solo lectura' }
+  }
+  // Crear un borrador (p. ej. en Gmail) no envía nada: es justo lo que pide «solo borrador».
+  if (isDraftTool(toolName) && decided.mode !== 'deny' && (decided.mode === 'draft' || opts.draftsOnly)) {
+    return { mode: 'auto', reason: 'Solo crea un borrador, no envía nada' }
+  }
   if (opts.draftsOnly && decided.mode !== 'deny' && !isReadOnlyTool(toolName)) {
     return { mode: 'draft', reason: 'Modo solo borradores' }
   }

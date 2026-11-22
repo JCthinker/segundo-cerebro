@@ -1,6 +1,8 @@
-import { query, type CanUseTool, type EffortLevel, type McpServerConfig, type SDKMessage } from '@anthropic-ai/claude-agent-sdk'
+import { query, type CanUseTool, type EffortLevel, type McpServerConfig, type Query, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
 import type { AiStatus } from '@shared/types'
+import { serverKey } from '@shared/permissions'
 import { getApiKey, getSettings } from '../settings'
+import { connectorToolAllowed, isConnectorName, isConnectorTool, knownConnectorNames } from './connectors'
 
 export interface AgentEvent {
   type: 'text' | 'tool'
@@ -16,6 +18,11 @@ export interface RunAgentOptions {
   /** Herramientas integradas de Claude Code permitidas (por defecto ninguna: solo MCP). */
   builtinTools?: string[]
   canUseTool?: CanUseTool
+  /**
+   * Conexiones de claude.ai que puede usar esta ejecución: 'enabled' = las que el usuario activó,
+   * o una lista concreta (siempre dentro de las activadas). Por defecto ninguna.
+   */
+  connectors?: 'enabled' | string[]
   outputSchema?: Record<string, unknown>
   effort?: EffortLevel
   maxTurns?: number
@@ -30,7 +37,7 @@ export interface RunAgentResult {
 
 export class AiUnavailableError extends Error {}
 
-function agentEnv(): Record<string, string | undefined> {
+export function agentEnv(): Record<string, string | undefined> {
   const s = getSettings()
   const env: Record<string, string | undefined> = { ...process.env, CLAUDE_AGENT_SDK_CLIENT_APP: 'segundo-cerebro/0.1.0' }
   if (s.aiMode === 'api-key') {
@@ -44,28 +51,98 @@ function agentEnv(): Record<string, string | undefined> {
   return env
 }
 
+/** Por defecto solo se permiten las herramientas internas de la app. */
+const internalOnly: CanUseTool = async (name, input) =>
+  name.startsWith('mcp__cerebro__')
+    ? { behavior: 'allow', updatedInput: input }
+    : { behavior: 'deny', message: 'Esta tarea no puede usar herramientas externas.' }
+
 /** Ejecuta el agente de Claude y devuelve el texto final (y la salida estructurada si se pidió). */
 export async function runAgent(o: RunAgentOptions): Promise<RunAgentResult> {
   const s = getSettings()
+  const env = agentEnv()
+  const allowed =
+    s.aiMode === 'claude-code'
+      ? o.connectors === 'enabled'
+        ? s.claudeConnectors
+        : (o.connectors ?? []).filter((n) => s.claudeConnectors.includes(n))
+      : []
+  // Sin conexiones permitidas, Claude Code no las carga. Con alguna, las demás se quitan.
+  if (!allowed.length) env.ENABLE_CLAUDEAI_MCP_SERVERS = 'false'
+  const disallowedTools = knownConnectorNames()
+    .filter((n) => !allowed.includes(n))
+    .map((n) => `mcp__${serverKey(n)}`)
+  const gate = o.canUseTool ?? internalOnly
+  const canUseTool: CanUseTool = async (name, input, ctx) =>
+    isConnectorTool(name) && !connectorToolAllowed(name, allowed)
+      ? { behavior: 'deny', message: 'Esa conexión no está activada para la app.' }
+      : gate(name, input, ctx)
+
+  // Con conexiones de claude.ai, el mensaje se envía cuando ya están conectadas
+  // (si no, Claude empieza sin verlas). Las que no se usan se apagan.
+  let start: () => void = () => undefined
+  let finish: () => void = () => undefined
+  const started = new Promise<void>((r) => (start = r))
+  const finished = new Promise<void>((r) => (finish = r))
+  async function* streamed(): AsyncGenerator<SDKUserMessage> {
+    await started
+    yield { type: 'user', message: { role: 'user', content: o.prompt }, parent_tool_use_id: null }
+    await finished
+  }
+
   const q = query({
-    prompt: o.prompt,
+    prompt: allowed.length ? streamed() : o.prompt,
     options: {
       model: s.model,
       systemPrompt: o.system,
       tools: o.builtinTools ?? [],
       mcpServers: o.mcpServers ?? {},
-      canUseTool: o.canUseTool ?? (async (_name, input) => ({ behavior: 'allow', updatedInput: input })),
+      canUseTool,
+      disallowedTools,
       permissionMode: 'default',
       settingSources: s.useClaudeCodeConnections ? ['user'] : [],
       persistSession: false,
       maxTurns: o.maxTurns ?? 12,
       effort: o.effort ?? 'medium',
-      env: agentEnv(),
+      env,
       abortController: o.abortController,
       ...(o.outputSchema ? { outputFormat: { type: 'json_schema' as const, schema: o.outputSchema } } : {})
     }
   })
 
+  if (allowed.length) {
+    try {
+      await waitForConnectors(q, allowed)
+    } finally {
+      start()
+    }
+  }
+
+  try {
+    return await consume(q, o)
+  } finally {
+    finish()
+    if (allowed.length) q.close()
+  }
+}
+
+async function waitForConnectors(q: Query, allowed: string[]): Promise<void> {
+  const off = new Set<string>()
+  for (let i = 0; i < 30; i++) {
+    const status = await q.mcpServerStatus()
+    for (const st of status) {
+      if (isConnectorName(st.name) && !allowed.includes(st.name) && st.status !== 'disabled' && !off.has(st.name)) {
+        off.add(st.name)
+        await q.toggleMcpServer(st.name, false).catch(() => undefined)
+      }
+    }
+    const mine = status.filter((st) => allowed.includes(st.name))
+    if (mine.length === allowed.length && mine.every((st) => st.status !== 'pending')) return
+    await new Promise((r) => setTimeout(r, 500))
+  }
+}
+
+async function consume(q: Query, o: RunAgentOptions): Promise<RunAgentResult> {
   let lastText = ''
   for await (const msg of q as AsyncIterable<SDKMessage>) {
     if (msg.type === 'assistant') {

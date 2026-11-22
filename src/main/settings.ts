@@ -11,6 +11,7 @@ export function getSettings(): Settings {
     model: db.getSetting('model') ?? DEFAULT_MODEL,
     briefHour: Number(db.getSetting('briefHour') ?? 8),
     useClaudeCodeConnections: db.getSetting('useClaudeCodeConnections') === '1',
+    claudeConnectors: parseList(db.getSetting('claudeConnectors')),
     onboarded: db.getSetting('onboarded') === '1'
   }
 }
@@ -20,6 +21,7 @@ export function updateSettings(patch: Partial<Settings> & { apiKey?: string | nu
   if (patch.model !== undefined) db.setSetting('model', patch.model.trim() || DEFAULT_MODEL)
   if (patch.briefHour !== undefined) db.setSetting('briefHour', String(patch.briefHour))
   if (patch.useClaudeCodeConnections !== undefined) db.setSetting('useClaudeCodeConnections', patch.useClaudeCodeConnections ? '1' : '0')
+  if (patch.claudeConnectors !== undefined) db.setSetting('claudeConnectors', JSON.stringify([...new Set(patch.claudeConnectors)]))
   if (patch.onboarded !== undefined) db.setSetting('onboarded', patch.onboarded ? '1' : '0')
   if (patch.apiKey !== undefined) db.setSetting('apiKey', patch.apiKey ? encrypt(patch.apiKey.trim()) : null)
   return getSettings()
@@ -28,4 +30,13 @@ export function updateSettings(patch: Partial<Settings> & { apiKey?: string | nu
 export function getApiKey(): string | null {
   const v = db.getSetting('apiKey')
   return v ? decrypt(v) : null
+}
+
+function parseList(v: string | null | undefined): string[] {
+  try {
+    const a = JSON.parse(v ?? '[]')
+    return Array.isArray(a) ? a.filter((x) => typeof x === 'string') : []
+  } catch {
+    return []
+  }
 }

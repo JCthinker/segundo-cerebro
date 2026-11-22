@@ -73,3 +73,21 @@ describe('decideToolMode', () => {
     expect(decideToolMode('mcp__jira__delete_issue', rules, { draftsOnly: true }).mode).toBe('deny')
   })
 })
+
+describe('conexiones de la cuenta de claude.ai', () => {
+  const rules = parsePermissions('## Permisos\n- gmail: solo borrador\n- google drive: automático\n')
+  it('«gmail» se aplica a mcp__claude_ai_Gmail__*', () => {
+    expect(decideToolMode('mcp__claude_ai_Gmail__send_message', rules).mode).toBe('draft')
+    expect(decideToolMode('mcp__claude_ai_Google_Drive__create_file', rules).mode).toBe('auto')
+  })
+  it('crear un borrador está permitido con «solo borrador» y en modo borradores', () => {
+    expect(decideToolMode('mcp__claude_ai_Gmail__create_draft', rules).mode).toBe('auto')
+    expect(decideToolMode('mcp__claude_ai_Gmail__create_draft', [], { draftsOnly: true }).mode).toBe('auto')
+    expect(decideToolMode('mcp__claude_ai_Gmail__create_draft', []).mode).toBe('ask')
+  })
+  it('leer sigue siendo automático y prohibido gana', () => {
+    expect(decideToolMode('mcp__claude_ai_Gmail__search_threads', rules).mode).toBe('auto')
+    const deny = parsePermissions('## Permisos\n- gmail: solo borrador\n- *draft*: prohibido\n')
+    expect(decideToolMode('mcp__claude_ai_Gmail__create_draft', deny).mode).toBe('deny')
+  })
+})

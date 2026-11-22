@@ -7,7 +7,9 @@ import * as db from './db'
 import { dataChanged } from './events'
 import { getSettings, updateSettings } from './settings'
 import { seedDemo, seedTemplateOnly } from './seed'
-import { cachedAiStatus, friendlyError, markAiFailure, markAiOk, testAi } from './agent/client'
+import { agentEnv, cachedAiStatus, friendlyError, markAiFailure, markAiOk, testAi } from './agent/client'
+import { connectorLabel, listClaudeConnectors } from './agent/connectors'
+import { parsePermissions } from '@shared/permissions'
 import { dayRange, generateBrief } from './agent/brief'
 import { extractToInbox } from './agent/extract'
 import { cancelRun, startResolve } from './agent/resolve'
@@ -186,6 +188,21 @@ const api: Record<string, (...args: any[]) => unknown> = {
     const s = db.listSources().find((x) => x.id === id)
     if (!s) return 0
     return s.kind === 'ics' ? syncIcs(s) : withAi(() => syncMcpSource(s))
+  },
+  'connectors.list': async (refresh?: boolean) => {
+    try {
+      return await listClaudeConnectors(agentEnv(), !!refresh)
+    } catch (e) {
+      throw new Error(friendlyError(e))
+    }
+  },
+  'connectors.toggle': (name: string, on: boolean) => {
+    const cur = getSettings().claudeConnectors.filter((n) => n !== name)
+    updateSettings({ claudeConnectors: on ? [...cur, name] : cur })
+    dataChanged('mcp')
+    const label = connectorLabel(name).toLowerCase()
+    const hasRule = parsePermissions(db.getWorkflow().markdown).some((r) => r.pattern.toLowerCase().replace(/\s+/g, '_').startsWith(label.replace(/\s+/g, '_')))
+    return { hasRule }
   },
   'mcp.list': () => db.listMcpServers(),
   'mcp.upsert': (s) => {

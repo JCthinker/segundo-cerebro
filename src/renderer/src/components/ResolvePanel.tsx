@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { ActionRun, Item, RunLogEntry } from '@shared/types'
+import { serverLabel, serverOf, shortToolName } from '@shared/permissions'
 import { call, useAction, useEvent } from '../api'
 import { ToolInput } from './ApprovalHost'
 import { Button, ErrorNote, Icon, Modal, Pill, Spinner, textareaCls } from './ui'
@@ -17,7 +18,8 @@ const ENTRY_STYLE: Record<RunLogEntry['type'], { icon: Parameters<typeof Icon>[0
 function LogEntry({ e }: { e: RunLogEntry }) {
   const [open, setOpen] = useState(e.type === 'draft')
   const st = ENTRY_STYLE[e.type]
-  const tool = e.toolName?.replace(/^mcp__/, '').replace('__', ' · ').replace(/_/g, ' ')
+  const server = e.toolName ? serverOf(e.toolName) : null
+  const tool = e.toolName ? `${server ? serverLabel(server) + ' · ' : ''}${shortToolName(e.toolName).replace(/_/g, ' ')}` : ''
   return (
     <div className="flex gap-2.5 py-1.5">
       <Icon name={st.icon} className={`mt-0.5 ${st.tone}`} />

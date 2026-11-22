@@ -1,3 +1,4 @@
+import { connectorLabel } from './connectors'
 import { createSdkMcpServer, tool, type McpServerConfig, type SdkMcpToolDefinition } from '@anthropic-ai/claude-agent-sdk'
 import { z } from 'zod'
 import * as db from '../db'
@@ -103,7 +104,8 @@ export function userMcpServers(only?: string[]): Record<string, McpServerConfig>
 }
 
 export function connectedToolsSummary(): string {
-  const names = Object.keys(userMcpServers())
+  const s = getSettings()
+  const names = [...Object.keys(userMcpServers()), ...(s.aiMode === 'claude-code' ? s.claudeConnectors.map(connectorLabel) : [])]
   const extra = getSettings().useClaudeCodeConnections ? ' y las conexiones que tengas en Claude Code' : ''
   return names.length ? `Herramientas conectadas: ${names.join(', ')}${extra}.` : `No hay herramientas externas conectadas${extra}.`
 }

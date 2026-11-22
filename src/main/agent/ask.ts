@@ -27,6 +27,7 @@ export async function ask(history: ChatMessage[], onTool?: (name: string) => voi
       prompt: `Conversación hasta ahora:\n\n${transcript}\n\nResponde al último mensaje del usuario.`,
       mcpServers: { cerebro: cerebroServer({ allowWrites: true, onChange: () => dataChanged('items') }), ...userMcpServers() },
       canUseTool: makeGate(runId, { draftsOnly: false, log }),
+        connectors: 'enabled',
       effort: 'high',
       maxTurns: 20,
       onEvent: (e) => {

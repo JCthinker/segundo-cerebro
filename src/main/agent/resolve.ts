@@ -45,6 +45,7 @@ export function startResolve(itemId: string | null, goal: string, mode: 'normal'
         prompt: `${itemText}\n\nLo que quiere el usuario: ${goal || 'Resuélvelo.'}${mode === 'drafts' ? '\n\nEl usuario ha pedido SOLO BORRADORES: no ejecutes nada que escriba o envíe; prepáralo todo para que lo revise.' : ''}`,
         mcpServers: { cerebro: cerebroServer({ allowWrites: true, onChange: () => dataChanged('items') }), ...userMcpServers() },
         canUseTool: makeGate(run.id, { draftsOnly: mode === 'drafts', log }),
+        connectors: 'enabled',
         effort: 'high',
         maxTurns: 30,
         abortController: ac,

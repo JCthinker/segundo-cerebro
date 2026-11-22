@@ -48,7 +48,13 @@ En Mi flujo, sección `## Permisos`, una línea por herramienta:
 - *delete*: prohibido
 ```
 
+Las conexiones de tu cuenta de claude.ai (Gmail, Google Drive, Notion…) se usan con su nombre: `gmail`, `google drive`. «Solo borrador» deja leer y crear borradores (por ejemplo, en Gmail), pero no enviar.
+
 Sin regla, leer es automático y escribir requiere tu OK. Las acciones que requieren OK aparecen como tarjetas de aprobación. «Solo borradores» prepara todo sin enviar nada. Todo queda registrado.
+
+## Conexiones de tu cuenta de Claude
+
+Si usas la IA con Claude Code y tu cuenta de claude.ai, en **Entradas → De tu cuenta de Claude** aparecen los conectores que tengas en claude.ai (Ajustes → Conectores): Gmail, Google Drive, Notion… Actívalos uno a uno con «Usar en la app». La app solo carga los que actives, y únicamente en «Resolver», «Preguntar» y las lecturas a la bandeja. El brief y la detección en notas no usan ninguna herramienta externa.
 
 ## Requisitos
 
