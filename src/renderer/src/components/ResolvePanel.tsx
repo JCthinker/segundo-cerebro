@@ -54,7 +54,8 @@ export function ResolvePanel({ item, initialGoal, onClose }: { item: Item | null
 
   const running = run?.status === 'running'
   const result = run?.log.filter((e) => e.type === 'result').at(-1)
-  const steps = run?.log.filter((e) => e.type !== 'result') ?? []
+  // El último texto de Claude suele repetir el resultado final: no lo mostramos dos veces.
+  const steps = run?.log.filter((e) => e.type !== 'result' && !(e.type === 'text' && result && e.text.trim() === result.text.trim())) ?? []
 
   return (
     <Modal onClose={running ? undefined : onClose} width="max-w-2xl">
