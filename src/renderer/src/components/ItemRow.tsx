@@ -1,5 +1,4 @@
 import type { Area, Item, ScoredItem } from '@shared/types'
-import { KIND_LABEL } from '@shared/types'
 import { formatRelative } from '@shared/dates'
 import { call } from '../api'
 import { useNav } from '../nav'
@@ -90,7 +89,7 @@ export function ItemRow({
         {!compact ? <SourceLine item={item} /> : null}
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
-        {item.kind !== 'task' ? <Pill>{KIND_LABEL[item.kind]}{item.person ? ` · ${item.person}` : ''}</Pill> : item.person ? <Pill>{item.person}</Pill> : null}
+        {item.person ? <Pill tone="clay">→ {item.person}</Pill> : null}
         {area && !compact ? <Pill tone="neutral">{area.name}</Pill> : null}
         <DuePill item={item} atRisk={scored?.atRisk} />
         <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">

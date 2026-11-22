@@ -1,6 +1,6 @@
 import { dialog, ipcMain, shell, BrowserWindow } from 'electron'
 import { writeFile } from 'node:fs/promises'
-import { toDay } from '@shared/dates'
+import { addDays, toDay } from '@shared/dates'
 import { rankItems } from '@shared/priority'
 import type { TodayView } from '@shared/types'
 import * as db from './db'
@@ -45,14 +45,18 @@ async function extractNote(id: string, force = false): Promise<number> {
 function todayView(): TodayView {
   const date = toDay(new Date())
   const areas = db.listAreas()
-  const { from, to } = dayRange(date)
+  // Agenda de los próximos 7 días, para el dashboard.
+  const from = dayRange(date).from
+  const to = dayRange(addDays(date, 6)).to
+  const proposed = db.listItems({ status: ['proposed'] })
   return {
     date,
     ranked: rankItems(db.listItems({ status: ['active'] }), date, areas),
     events: db.listEvents(from, to),
     brief: db.getBrief(date),
     areas,
-    proposedCount: db.countProposed()
+    proposedCount: proposed.length,
+    proposed
   }
 }
 

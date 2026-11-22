@@ -80,12 +80,12 @@ export function Sources({ ai }: { ai: AiStatus | null }) {
 
   return (
     <div>
-      <PageHeader title="Entradas" subtitle="Todo lo que entra se convierte en promesas, entregas y tareas. Tú confirmas cada una en la bandeja." />
+      <PageHeader title="Entradas" subtitle="Todo lo que entra se convierte en cosas por hacer. Tú confirmas cada una en «Nuevo detectado»." />
 
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-3">
         <Tile icon="notes" title="Notas" sub="Integrado. Se analizan solas mientras escribes." onClick={() => go('notes')} />
-        <Tile icon="bolt" title="Captura rápida" sub="Atajo global desde cualquier app." onClick={() => go('inbox')} />
-        <Tile icon="users" title="Actas de reunión" sub="Pega la transcripción en la bandeja." onClick={() => go('inbox')} />
+        <Tile icon="bolt" title="Captura rápida" sub="Atajo global o la caja del dashboard." onClick={() => go('today')} />
+        <Tile icon="users" title="Actas de reunión" sub="Pégala en la caja del dashboard." onClick={() => go('today')} />
         <Tile icon="file" title="Archivos y PDFs" sub={fromFile.busy ? 'Analizando…' : 'Elige un archivo para analizar.'} onClick={() => fromFile.run()} />
         <Tile icon="calendar" title="Calendario" sub={calendars.length ? `${calendars.length} conectado${calendars.length > 1 ? 's' : ''}` : 'Conecta con una URL de calendario (ICS).'} />
         <Tile icon="mic" title="Notas de voz" sub="Próximamente." muted />
@@ -139,7 +139,7 @@ export function Sources({ ai }: { ai: AiStatus | null }) {
               <div className="truncate text-[12px] text-faint">{'url' in s.config ? s.config.url : `${s.config.command} ${(s.config.args ?? []).join(' ')}`}</div>
             </div>
             <Button size="sm" variant="ghost" onClick={() => setPullFor({ kind: 'mcp', name: `Desde ${s.name}`, config: { server: s.name, instructions: CATALOG.find((c) => c.name === s.name)?.pull ?? '' }, enabled: true })}>
-              Traer a la bandeja
+              Traer al dashboard
             </Button>
             <Button size="sm" variant="ghost" onClick={() => setEditing(s)}>
               Editar
@@ -158,7 +158,7 @@ export function Sources({ ai }: { ai: AiStatus | null }) {
 
       {pulls.length ? (
         <>
-          <SectionLabel>Lecturas programadas a la bandeja</SectionLabel>
+          <SectionLabel>Lecturas programadas</SectionLabel>
           <Card className="px-4">
             {pulls.map((p) => (
               <div key={p.id} className="flex items-center gap-2 border-b border-line py-2.5 last:border-0">
@@ -268,7 +268,7 @@ function ClaudeConnectors({ onPull }: { onPull: (s: Partial<Source>) => void }) 
                     variant="ghost"
                     onClick={() => onPull({ kind: 'mcp', name: `Desde ${c.label}`, config: { server: c.name, instructions: CONNECTOR_HINTS[c.label]?.pull ?? 'Lo que me afecte de los últimos 3 días' }, enabled: true })}
                   >
-                    Traer a la bandeja
+                    Traer al dashboard
                   </Button>
                 ) : null}
                 <label className="flex items-center gap-1.5 text-[12.5px] text-muted">
@@ -373,8 +373,8 @@ function PullEditor({ source, onClose }: { source: Partial<Source>; onClose: () 
   return (
     <Modal onClose={onClose}>
       <div className="space-y-3 p-5">
-        <h2 className="text-[16px] font-semibold">Traer a la bandeja desde {String(source.config?.server).replace(/^claude\.ai\s+/i, '')}</h2>
-        <p className="text-[13px] text-muted">Claude usará solo herramientas de lectura y dejará lo que encuentre en la bandeja para que lo confirmes.</p>
+        <h2 className="text-[16px] font-semibold">Traer al dashboard desde {String(source.config?.server).replace(/^claude\.ai\s+/i, '')}</h2>
+        <p className="text-[13px] text-muted">Claude usará solo herramientas de lectura y dejará lo que encuentre en «Nuevo detectado» para que lo confirmes.</p>
         <Field label="Qué buscar">
           <textarea rows={3} className={textareaCls} value={instructions} onChange={(e) => setInstructions(e.target.value)} />
         </Field>

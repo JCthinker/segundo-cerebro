@@ -152,6 +152,8 @@ export interface TodayView {
   brief: Brief | null
   areas: Area[]
   proposedCount: number
+  /** Lo detectado que espera tu confirmación. */
+  proposed: Item[]
 }
 
 export const KIND_LABEL: Record<ItemKind, string> = {

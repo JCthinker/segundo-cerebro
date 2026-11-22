@@ -27,7 +27,7 @@ export function Capture() {
     setState('busy')
     try {
       const n = await call<number>('capture', text)
-      setMsg(n ? `${n} ${n === 1 ? 'elemento' : 'elementos'} en la bandeja` : 'Guardado: no había nada que detectar')
+      setMsg(n ? `${n} ${n === 1 ? 'elemento' : 'elementos'} por confirmar en el dashboard` : 'Guardado: no había nada que detectar')
       setState('done')
       setTimeout(close, 1200)
     } catch (e) {

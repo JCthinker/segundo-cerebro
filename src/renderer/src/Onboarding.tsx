@@ -21,7 +21,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
         </div>
         {step === 1 ? (
           <>
-            <h1 className="text-[28px] font-semibold tracking-tight">Tus notas, promesas y agenda, ordenadas por lo que importa</h1>
+            <h1 className="text-[28px] font-semibold tracking-tight">Lo que tienes que hacer hoy y los próximos días, en una pantalla</h1>
             <p className="mt-3 text-[15px] leading-relaxed text-muted">
               Escribe como siempre. Claude detecta lo que prometiste y lo que vence, lo prioriza según tus reglas y, si quieres, lo resuelve con tus herramientas. Siempre con tu permiso.
             </p>

@@ -52,7 +52,7 @@ export function Notes({ ai }: { ai: AiStatus | null }) {
         ) : (
           <div className="p-10">
             <Empty title="Escribe tu primera nota" action={<Button variant="primary" onClick={create}>Nueva nota</Button>}>
-              Mientras escribes, Claude detecta promesas, entregas y tareas y las deja en la bandeja.
+              Mientras escribes, Claude detecta lo que tienes que hacer y te lo propone en el dashboard.
             </Empty>
           </div>
         )}

@@ -15,13 +15,9 @@ Todo se rige por **Mi flujo**: una página viva que escribes tú, con tus priori
 
 | Pantalla | Qué hace |
 | --- | --- |
-| **Hoy** | Brief del día: las 3 cosas, promesas que vencen, agenda con checklist de preparación, entregas en el horizonte, qué puedes soltar y qué reglas se aplicaron. |
-| **Bandeja** | Todo lo detectado (en notas, capturas, actas, archivos y herramientas) espera aquí a que lo confirmes. |
-| **Notas** | Editor de bloques. Mientras escribes, Claude detecta promesas, entregas, tareas y decisiones. |
-| **Promesas / Entregas** | Listas filtrables por persona, área y estado. |
-| **Mi flujo** | Tu página de reglas, con historial de versiones, sugerencias de Claude y exportación como skill. |
-| **Entradas** | Calendarios ICS, archivos y PDFs, herramientas MCP (Jira, Slack, GitHub, Notion, Linear…) y el registro de todo lo que ha hecho Claude. |
-| **Preguntar** | Chat sobre todo tu contenido y tus herramientas. |
+| **Dashboard** | La pantalla principal: lo atrasado, lo de hoy (por prioridad) con tus reuniones, y una tarjeta por cada uno de los próximos 6 días. Cada cosa aparece el día en que tienes que **empezarla** (fecha límite menos días de preparación). Debajo: lo nuevo que ha detectado Claude para confirmar, lo de más adelante y lo que no tiene fecha. Arriba, una caja para apuntar algo o preguntar. |
+| **Notas** | Editor de bloques. Mientras escribes, Claude detecta lo que tienes que hacer y te lo propone en el dashboard. |
+| **Ajustes** | Tres pestañas: General (Claude, áreas, brief), **Entradas** (calendarios, archivos, herramientas y registro) y **Mi flujo** (tus reglas, con historial y exportación como skill). |
 
 **Captura rápida:** desde cualquier app, con ⌥ Espacio (o ⌘ ⇧ Espacio si el primero está ocupado).
 

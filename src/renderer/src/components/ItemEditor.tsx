@@ -6,7 +6,7 @@ import { SourceLine } from './ItemRow'
 import { Button, ErrorNote, Field, Icon, inputCls, Modal } from './ui'
 
 const STATUS_LABEL: Record<ItemStatus, string> = {
-  proposed: 'Propuesto (en la bandeja)',
+  proposed: 'Por confirmar',
   active: 'Activo',
   done: 'Hecho',
   dismissed: 'Descartado',

@@ -7,25 +7,24 @@ import { ItemEditor } from './components/ItemEditor'
 import { ResolvePanel } from './components/ResolvePanel'
 import { Icon } from './components/ui'
 import { Onboarding } from './Onboarding'
-import { Today } from './pages/Today'
-import { Inbox } from './pages/Inbox'
+import { Dashboard } from './pages/Dashboard'
 import { Notes } from './pages/Notes'
-import { Commitments } from './pages/Commitments'
 import { Workflow } from './pages/Workflow'
 import { Sources } from './pages/Sources'
-import { Ask } from './pages/Ask'
 import { Settings } from './pages/Settings'
 
 const NAV: { page: Page; label: string; icon: Parameters<typeof Icon>[0]['name'] }[] = [
-  { page: 'today', label: 'Hoy', icon: 'sun' },
-  { page: 'inbox', label: 'Bandeja', icon: 'inbox' },
-  { page: 'notes', label: 'Notas', icon: 'notes' },
-  { page: 'promises', label: 'Promesas', icon: 'hand' },
-  { page: 'deadlines', label: 'Entregas', icon: 'flag' },
-  { page: 'workflow', label: 'Mi flujo', icon: 'route' },
-  { page: 'sources', label: 'Entradas', icon: 'plug' },
-  { page: 'ask', label: 'Preguntar', icon: 'chat' }
+  { page: 'today', label: 'Dashboard', icon: 'sun' },
+  { page: 'notes', label: 'Notas', icon: 'notes' }
 ]
+
+/** Ajustes agrupa lo que se configura una vez: Claude, de dónde sale el contexto y tus reglas. */
+const SETTINGS_TABS: { page: Page; label: string }[] = [
+  { page: 'settings', label: 'General' },
+  { page: 'sources', label: 'Entradas' },
+  { page: 'workflow', label: 'Mi flujo' }
+]
+const isSettings = (p: Page) => SETTINGS_TABS.some((t) => t.page === p)
 
 export function App() {
   const [page, setPage] = useState<Page>('today')
@@ -80,7 +79,7 @@ export function App() {
               >
                 <Icon name={n.icon} />
                 {n.label}
-                {n.page === 'inbox' && today?.proposedCount ? (
+                {n.page === 'today' && today?.proposedCount ? (
                   <span className="ml-auto rounded-full bg-clay px-1.5 text-[11px] font-semibold text-clay-ink">{today.proposedCount}</span>
                 ) : null}
               </button>
@@ -95,7 +94,7 @@ export function App() {
             </button>
             <button
               onClick={() => go('settings')}
-              className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13.5px] ${page === 'settings' ? 'bg-selected text-ink' : 'text-muted hover:bg-hover hover:text-ink'}`}
+              className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13.5px] ${isSettings(page) ? 'bg-selected text-ink' : 'text-muted hover:bg-hover hover:text-ink'}`}
             >
               <Icon name="settings" /> Ajustes
             </button>
@@ -117,14 +116,23 @@ export function App() {
             </div>
           ) : null}
           <div className={page === 'notes' ? 'h-full px-8 py-6' : 'mx-auto max-w-5xl px-8 pt-10 pb-6'}>
-            {page === 'today' && <Today ai={ai} />}
-            {page === 'inbox' && <Inbox shortcut={settings.shortcut} />}
+            {isSettings(page) ? (
+              <div className="mb-6 flex gap-1 border-b border-line">
+                {SETTINGS_TABS.map((t) => (
+                  <button
+                    key={t.page}
+                    onClick={() => go(t.page)}
+                    className={`-mb-px border-b-2 px-3 py-2 text-[13px] ${page === t.page ? 'border-ink font-medium text-ink' : 'border-transparent text-muted hover:text-ink'}`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            {page === 'today' && <Dashboard ai={ai} shortcut={settings.shortcut} />}
             {page === 'notes' && <Notes ai={ai} />}
-            {page === 'promises' && <Commitments kind="promise" />}
-            {page === 'deadlines' && <Commitments kind="deadline" />}
             {page === 'workflow' && <Workflow ai={ai} />}
             {page === 'sources' && <Sources ai={ai} />}
-            {page === 'ask' && <Ask ai={ai} />}
             {page === 'settings' && <Settings ai={ai} onAi={setAi} />}
           </div>
         </main>
