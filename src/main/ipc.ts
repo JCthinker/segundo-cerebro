@@ -116,7 +116,11 @@ const api: Record<string, (...args: any[]) => unknown> = {
     dataChanged('notes')
     return n
   },
-  'notes.save': (id: string, title: string, json: string, plain: string) => db.saveNote(id, title, json, plain),
+  'notes.save': (id: string, title: string, json: string, plain: string) => {
+    const n = db.saveNote(id, title, json, plain)
+    dataChanged('notes') // para que la lista y las migas de pan muestren el título nuevo
+    return n
+  },
   'notes.delete': (id: string) => {
     db.deleteNote(id)
     dataChanged('notes')
