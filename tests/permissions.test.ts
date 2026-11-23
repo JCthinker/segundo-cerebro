@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { decideToolMode, isReadOnlyTool, parsePermissions } from '@shared/permissions'
+import { decideToolMode, isReadOnlyTool, parsePermissions, stepEffect } from '@shared/permissions'
 
 const FLOW = `# Cómo trabajo
 
@@ -62,12 +62,10 @@ describe('decideToolMode', () => {
     expect(decideToolMode('mcp__jira__delete_issue', rules).mode).toBe('deny')
   })
 
-  it('por defecto: lo que pides se hace solo; borrar pide OK', () => {
+  it('por defecto: leer es automático; escribir o enviar pide OK', () => {
     expect(decideToolMode('mcp__github__list_issues', []).mode).toBe('auto')
-    expect(decideToolMode('mcp__github__create_issue', []).mode).toBe('auto')
-    expect(decideToolMode('mcp__slack__send_message', []).mode).toBe('auto')
-    expect(decideToolMode('mcp__github__delete_issue', []).mode).toBe('ask')
-    expect(decideToolMode('mcp__claude_ai_Gmail__trash_thread', []).mode).toBe('ask')
+    expect(decideToolMode('mcp__github__create_issue', []).mode).toBe('ask')
+    expect(decideToolMode('mcp__slack__send_message', []).mode).toBe('ask')
   })
 
   it('el modo solo borradores convierte escrituras en borrador pero no relaja prohibiciones', () => {
@@ -86,11 +84,26 @@ describe('conexiones de la cuenta de claude.ai', () => {
   it('crear un borrador está permitido con «solo borrador» y en modo borradores', () => {
     expect(decideToolMode('mcp__claude_ai_Gmail__create_draft', rules).mode).toBe('auto')
     expect(decideToolMode('mcp__claude_ai_Gmail__create_draft', [], { draftsOnly: true }).mode).toBe('auto')
-    expect(decideToolMode('mcp__claude_ai_Gmail__create_draft', []).mode).toBe('auto')
+    expect(decideToolMode('mcp__claude_ai_Gmail__create_draft', []).mode).toBe('ask')
   })
   it('leer sigue siendo automático y prohibido gana', () => {
     expect(decideToolMode('mcp__claude_ai_Gmail__search_threads', rules).mode).toBe('auto')
     const deny = parsePermissions('## Permisos\n- gmail: solo borrador\n- *draft*: prohibido\n')
     expect(decideToolMode('mcp__claude_ai_Gmail__create_draft', deny).mode).toBe('deny')
+  })
+})
+
+describe('qué pasará con cada paso del plan', () => {
+  const rules = parsePermissions('## Permisos\n- gmail: solo borrador\n- jira: automático\n- slack: prohibido\n')
+  it('consultar y lo de la app se hacen solos', () => {
+    expect(stepEffect('read', 'Slack', rules)).toBe('auto')
+    expect(stepEffect('app', null, rules)).toBe('auto')
+  })
+  it('escribir sigue tus permisos y, sin regla, pide OK', () => {
+    expect(stepEffect('write', 'Gmail', rules)).toBe('draft')
+    expect(stepEffect('write', 'Jira', rules)).toBe('auto')
+    expect(stepEffect('write', 'Slack', rules)).toBe('deny')
+    expect(stepEffect('write', 'Google Drive', rules)).toBe('ask')
+    expect(stepEffect('write', 'Jira', rules, { draftsOnly: true })).toBe('draft')
   })
 })

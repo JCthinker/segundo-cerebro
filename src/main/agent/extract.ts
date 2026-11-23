@@ -42,12 +42,27 @@ export const ITEMS_SCHEMA = {
           area: { type: ['string', 'null'], description: 'Una de las áreas del usuario, si encaja' },
           snippet: { type: 'string', description: 'Frase literal del texto de donde sale' },
           ref: { type: ['string', 'null'], description: 'Enlace o identificador de origen (URL, clave de ticket…), si lo hay' },
-          tool: { type: ['string', 'null'], description: 'Nombre de la herramienta de donde sale (Slack, Gmail, Jira, Google Drive…); null si es una nota o un texto' }
+          tool: {
+            type: ['string', 'null'],
+            description:
+              'Herramienta o herramientas de donde sale, separadas por comas si son varias (p. ej. «Slack» o «Slack, Jira»); null si es una nota o un texto'
+          }
         }
       }
     }
   }
 } as const
+
+/** Igual, pero para lo leído de herramientas: siempre hay que decir de cuál (o cuáles) sale. */
+export const TOOL_ITEMS_SCHEMA = (() => {
+  const s = JSON.parse(JSON.stringify(ITEMS_SCHEMA))
+  s.properties.items.items.properties.tool = {
+    type: 'string',
+    minLength: 2,
+    description: 'Herramienta o herramientas de donde sale, con su nombre (Slack, Gmail, Jira, Google Drive…). Si sale de varias, sepáralas con comas: «Slack, Jira».'
+  }
+  return s as Record<string, unknown>
+})()
 
 const EXTRACT_ROLE = `Eres el extractor del «segundo cerebro» del usuario. Lees un texto (una nota, un correo, un acta, un mensaje…) y detectas:
 - promise: algo que el usuario se comprometió a hacer para otra persona («te lo paso el viernes»).
@@ -67,6 +82,8 @@ export async function extractToInbox(p: {
   sourceType: SourceType
   sourceRef: string | null
   label: string
+  /** 'active' cuando el usuario ha pedido apuntarlo: entra directo en su lista, sin confirmar. */
+  status?: 'proposed' | 'active'
 }): Promise<number> {
   if (p.text.trim().length < 8) return 0
   const known = knownForPrompt()
@@ -79,7 +96,7 @@ export async function extractToInbox(p: {
     effort: 'low',
     maxTurns: 3
   })
-  return await saveProposals((r.structured as { items: Extracted[] } | null)?.items ?? [], p.sourceType, p.sourceRef)
+  return await saveProposals((r.structured as { items: Extracted[] } | null)?.items ?? [], p.sourceType, p.sourceRef, null, p.status)
 }
 
 /** Lo que ya existe o se descartó hace poco: con esto se evita volver a proponerlo. */
@@ -149,7 +166,13 @@ async function dropRewordings<T extends { title: string; person?: string | null 
  * Guarda lo detectado como propuestas en la bandeja, sin repetir tareas que ya existan
  * o se hayan descartado, aunque estén redactadas con otras palabras.
  */
-export async function saveProposals(items: Extracted[], sourceType: SourceType, sourceRef: string | null, sourceTool: string | null = null): Promise<number> {
+export async function saveProposals(
+  items: Extracted[],
+  sourceType: SourceType,
+  sourceRef: string | null,
+  sourceTool: string | null = null,
+  status: 'proposed' | 'active' = 'proposed'
+): Promise<number> {
   const existing = existingForDedupe()
   const candidates = items.map((x) => {
     const ref = x.ref || sourceRef
@@ -165,7 +188,7 @@ export async function saveProposals(items: Extracted[], sourceType: SourceType, 
       dueDate: due,
       prepDays: Math.max(0, Math.round(x.prepDays || 0)),
       areaId: db.findAreaByName(x.area)?.id ?? null,
-      status: 'proposed',
+      status,
       sourceType,
       sourceRef: x.sourceRef,
       sourceSnippet: x.sourceSnippet,

@@ -52,11 +52,12 @@ export function cerebroServer(opts: { allowWrites: boolean; onChange?: () => voi
   if (opts.allowWrites) {
     tools.push(
       tool(
-        'propose_item',
-        'Propone un elemento nuevo (promesa, entrega, tarea o decisión). Queda en la bandeja hasta que el usuario lo confirme.',
+        'add_item',
+        'Apunta un elemento nuevo (promesa, entrega, tarea o decisión) en la lista del usuario. Queda activo directamente, sin pedirle confirmación. Apuntarlo no es hacerlo: no actúes sobre él hasta que te lo pida.',
         {
           kind: z.enum(['promise', 'deadline', 'task', 'decision']),
           title: z.string(),
+          context: z.string().optional().describe('Una o dos frases: qué ha pasado y qué hay que hacer'),
           person: z.string().nullable().optional(),
           dueDate: z.string().nullable().optional().describe('YYYY-MM-DD'),
           prepDays: z.number().int().min(0).optional(),
@@ -65,7 +66,7 @@ export function cerebroServer(opts: { allowWrites: boolean; onChange?: () => voi
         async (a) => {
           const item = db.createItem({
             kind: a.kind, title: a.title, person: a.person ?? null, dueDate: a.dueDate ?? null, prepDays: a.prepDays ?? 0,
-            status: 'proposed', sourceType: 'mcp', sourceSnippet: a.snippet ?? null
+            status: 'active', sourceType: 'manual', sourceSnippet: a.snippet ?? null, context: a.context ?? null
           })
           opts.onChange?.()
           return json({ ok: true, id: item.id })

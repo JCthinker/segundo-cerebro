@@ -24,35 +24,32 @@ export function SourceLine({ item }: { item: Item }) {
   const { go } = useNav()
   if (!item.sourceSnippet && !item.sourceRef) return null
   const label: Record<Item['sourceType'], string> = {
-    note: 'Nota', capture: 'Captura', calendar: 'Calendario', file: 'Archivo', transcript: 'Acta', mcp: 'Herramienta', manual: 'Manual'
+    note: 'Nota', capture: 'Captura', calendar: 'Calendario', file: 'Archivo', transcript: 'Acta', mcp: '', manual: 'Manual'
   }
-  // Lo que sale de una herramienta muestra su nombre (Slack, Gmail, Jira…).
-  // Si no se sabe la herramienta y el origen no es un enlace, se muestra el origen tal cual.
-  const unknownRef = item.sourceRef && !/^https?:\/\//.test(item.sourceRef) ? item.sourceRef : null
-  const name =
-    item.sourceType === 'mcp'
-      ? item.sourceTool || toolFromRef(item.sourceRef) || unknownRef || 'Herramienta conectada'
-      : label[item.sourceType]
-  const isUrl = item.sourceRef && /^https?:\/\//.test(item.sourceRef)
-  return (
-    <div className="mt-0.5 truncate text-[12px] text-faint">
-      {item.sourceType === 'note' && item.sourceRef ? (
-        <button className="hover:text-ink hover:underline" onClick={() => go('notes', item.sourceRef!)}>
-          {name}
-        </button>
-      ) : isUrl ? (
-        <button className="hover:text-ink hover:underline" onClick={() => call('shell.open', item.sourceRef)}>
-          {name}
-        </button>
-      ) : (
-        <span>
-          {name}
-          {item.sourceRef && item.sourceType !== 'note' && item.sourceRef !== name ? ` «${item.sourceRef}»` : ''}
-        </span>
-      )}
-      {item.sourceSnippet ? <span> · «{item.sourceSnippet}»</span> : null}
-    </div>
-  )
+  // De una herramienta: su nombre (o nombres, si son varias: «Slack, Jira»).
+  // Si no se sabe, no se inventa una etiqueta genérica: se enseña el origen tal cual.
+  const name = item.sourceType === 'mcp' ? item.sourceTool || toolFromRef(item.sourceRef) : label[item.sourceType]
+  const isUrl = !!item.sourceRef && /^https?:\/\//.test(item.sourceRef)
+  const plainRef = item.sourceRef && !isUrl && item.sourceType !== 'note' && item.sourceRef !== name ? item.sourceRef : null
+  const parts: React.ReactNode[] = []
+  if (item.sourceType === 'note' && item.sourceRef) {
+    parts.push(
+      <button key="n" className="hover:text-ink hover:underline" onClick={() => go('notes', item.sourceRef!)}>
+        {name}
+      </button>
+    )
+  } else if (isUrl) {
+    parts.push(
+      <button key="u" className="hover:text-ink hover:underline" onClick={() => call('shell.open', item.sourceRef)}>
+        {name ? `${name} ↗` : 'Ver el original ↗'}
+      </button>
+    )
+  } else if (name || plainRef) {
+    parts.push(<span key="t">{[name, plainRef ? `«${plainRef}»` : null].filter(Boolean).join(' ')}</span>)
+  }
+  if (item.sourceSnippet) parts.push(<span key="s">{parts.length ? ' · ' : ''}«{item.sourceSnippet}»</span>)
+  if (!parts.length) return null
+  return <div className="mt-0.5 truncate text-[12px] text-faint">{parts}</div>
 }
 
 export function ItemRow({

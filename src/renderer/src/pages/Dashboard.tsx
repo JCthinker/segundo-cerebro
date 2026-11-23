@@ -149,7 +149,7 @@ function QuickBox({ ai, shortcut }: { ai: AiStatus | null; shortcut: string | nu
   const note = useAction(async () => {
     if (!text.trim()) throw new Error('Escribe o pega algo primero.')
     const n = transcript ? await call<number>('transcript', text, title) : await call<number>('capture', text)
-    setMsg(n ? `${plural(n, 'cosa detectada', 'cosas detectadas')}: confírmalas en «Nuevo detectado».` : 'No he encontrado nada que hacer en ese texto.')
+    setMsg(n ? `${plural(n, 'cosa apuntada', 'cosas apuntadas')} en tu lista.` : 'No he encontrado nada que hacer en ese texto.')
     setText('')
     setTitle('')
   })
@@ -168,7 +168,7 @@ function QuickBox({ ai, shortcut }: { ai: AiStatus | null; shortcut: string | nu
   })
   const fromFile = useAction(async () => {
     const n = await call<number | null>('file.import')
-    if (n !== null) setMsg(n ? `${plural(n, 'cosa detectada', 'cosas detectadas')} en el archivo.` : 'No he encontrado nada que hacer en el archivo.')
+    if (n !== null) setMsg(n ? `${plural(n, 'cosa apuntada', 'cosas apuntadas')} del archivo en tu lista.` : 'No he encontrado nada que hacer en el archivo.')
   })
 
   return (

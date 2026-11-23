@@ -23,7 +23,7 @@ Esta página la escribes tú. Claude la lee antes de cada brief y cada vez que r
 - Nombre: qué suele pedir y con qué plazo.
 
 ## Permisos
-Qué puede hacer Claude con tus herramientas. Una línea por herramienta o servidor: automático, requiere OK, solo borrador o prohibido. Sin regla, lo que le pides a Claude lo hace solo; solo borrar algo te pide OK.
+Qué puede hacer Claude con tus herramientas. Una línea por herramienta o servidor: automático, requiere OK, solo borrador o prohibido. Sin regla, leer es automático y escribir o enviar algo requiere tu OK.
 - cerebro: automático
 - *delete*: prohibido
 `

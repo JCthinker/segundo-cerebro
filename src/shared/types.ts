@@ -117,6 +117,24 @@ export interface RunLogEntry {
   input?: unknown
 }
 
+/** Lo que va a pasar si le das a «Hazlo»: Claude lo prepara antes de actuar. */
+export interface PlanStep {
+  /** Frase llana: «Leer el hilo de Slack con Marta». */
+  text: string
+  tool: string | null
+  kind: 'read' | 'app' | 'write'
+  /** Qué pasará con este paso según tus permisos. */
+  effect: ToolMode
+}
+
+export interface ResolvePlan {
+  /** Una frase: qué conseguirá. */
+  summary: string
+  steps: PlanStep[]
+  /** Lo que Claude necesita saber de ti antes de empezar, si falta algo. */
+  question: string | null
+}
+
 export interface ActionRun {
   id: string
   itemId: string | null

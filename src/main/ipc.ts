@@ -2,7 +2,7 @@ import { dialog, ipcMain, shell, BrowserWindow } from 'electron'
 import { writeFile } from 'node:fs/promises'
 import { addDays, toDay } from '@shared/dates'
 import { rankItems } from '@shared/priority'
-import type { TodayView } from '@shared/types'
+import type { ResolvePlan, TodayView } from '@shared/types'
 import * as db from './db'
 import { dataChanged } from './events'
 import { getSettings, updateSettings } from './settings'
@@ -12,7 +12,7 @@ import { connectorLabel, listClaudeConnectors } from './agent/connectors'
 import { parsePermissions } from '@shared/permissions'
 import { dayRange, generateBrief } from './agent/brief'
 import { extractToInbox } from './agent/extract'
-import { cancelRun, startResolve } from './agent/resolve'
+import { cancelRun, planResolve, startResolve } from './agent/resolve'
 import { ask, type ChatMessage } from './agent/ask'
 import { claudeUsage } from './agent/usage'
 import { answerApproval } from './agent/permissions-gate'
@@ -245,7 +245,8 @@ const api: Record<string, (...args: any[]) => unknown> = {
   },
 
   // resolver y preguntar
-  'resolve.start': (itemId: string | null, goal: string, mode: 'normal' | 'drafts') => startResolve(itemId, goal, mode),
+  'resolve.plan': (itemId: string | null, goal: string, mode: 'normal' | 'drafts') => withAi(() => planResolve(itemId, goal, mode)),
+  'resolve.start': (itemId: string | null, goal: string, mode: 'normal' | 'drafts', plan?: ResolvePlan | null) => startResolve(itemId, goal, mode, plan),
   'resolve.cancel': (runId: string) => cancelRun(runId),
   'runs.list': () => db.listRuns(),
   'runs.get': (id: string) => db.getRun(id),

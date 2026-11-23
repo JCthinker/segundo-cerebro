@@ -10,7 +10,7 @@ import { connectorLabel, enabledConnectorNames, isConnectorName, knownConnectorN
 import { getSettings } from './settings'
 import { baseSystem } from './agent/context'
 import { agentEnv, friendlyError, markAiFailure, markAiOk, runAgent } from './agent/client'
-import { extractToInbox, ITEMS_SCHEMA, knownForPrompt, saveProposals, type Extracted } from './agent/extract'
+import { extractToInbox, ITEMS_SCHEMA, knownForPrompt, saveProposals, TOOL_ITEMS_SCHEMA, type Extracted } from './agent/extract'
 import { isReadOnlyTool } from '@shared/permissions'
 
 // ---------- calendario ICS ----------
@@ -137,7 +137,7 @@ const WHAT_TO_NOTE = `Qué apuntar:
 - Solo lo que pida una acción del propio usuario según las reglas de «Mi flujo». Si «Mi flujo» dice en qué casos avisar o crear una tarea, limítate a esos casos. Lo informativo, lo que tienen que hacer otros y lo que no encaja en su flujo no se apunta.
 - Nunca la misma tarea dos veces, aunque aparezca en varios canales, hilos o herramientas o con otras palabras: apúntala una vez (en "snippet", el fragmento más claro; en "ref", el enlace principal). Varias tareas distintas sobre un mismo asunto sí pueden salir.
 - Si una tarea ya está en la lista de lo apuntado o descartado, no la incluyas, aunque venga de otro canal o con otras palabras.
-- En "tool" pon el nombre de la herramienta de donde sale (Slack, Gmail, Jira, Google Drive…).
+- En "tool" pon siempre el nombre de la herramienta de donde sale (Slack, Gmail, Jira, Google Drive…). Si la tarea junta información de varias, ponlas todas separadas por comas («Slack, Jira»).
 - Devolver la lista vacía es lo normal si no hay nada nuevo que cumpla esto.`
 
 const MCP_PULL_ROLE = `Eres el lector de fuentes del «segundo cerebro». Usas SOLO herramientas de lectura de la herramienta indicada para encontrar lo que pide el usuario.
@@ -160,7 +160,7 @@ export async function syncMcpSource(source: Source): Promise<number> {
         isReadOnlyTool(toolName)
           ? { behavior: 'allow', updatedInput: input }
           : { behavior: 'deny', message: 'Esta sincronización es de solo lectura.' },
-      outputSchema: ITEMS_SCHEMA,
+      outputSchema: TOOL_ITEMS_SCHEMA,
       effort: 'medium',
       maxTurns: 15
     })
@@ -205,7 +205,7 @@ export async function importFile(path: string): Promise<number> {
   const name = basename(path)
   if (TEXT_EXT.has(ext)) {
     const text = await readFile(path, 'utf8')
-    const n = await extractToInbox({ text, sourceType: 'file', sourceRef: name, label: `archivo ${name}` })
+    const n = await extractToInbox({ text, sourceType: 'file', sourceRef: name, label: `archivo ${name}`, status: 'active' })
     dataChanged('items')
     return n
   }
@@ -225,7 +225,7 @@ export async function importFile(path: string): Promise<number> {
       effort: 'low',
       maxTurns: 6
     })
-    const n = await saveProposals((r.structured as { items: Extracted[] } | null)?.items ?? [], 'file', name)
+    const n = await saveProposals((r.structured as { items: Extracted[] } | null)?.items ?? [], 'file', name, null, 'active')
     dataChanged('items')
     return n
   }
@@ -234,13 +234,14 @@ export async function importFile(path: string): Promise<number> {
 
 export async function importTranscript(text: string, title: string): Promise<number> {
   const label = title.trim() || `Acta del ${toDay(new Date())}`
-  const n = await extractToInbox({ text, sourceType: 'transcript', sourceRef: label, label: `acta «${label}»` })
+  const n = await extractToInbox({ text, sourceType: 'transcript', sourceRef: label, label: `acta «${label}»`, status: 'active' })
   dataChanged('items')
   return n
 }
 
 export async function capture(text: string): Promise<number> {
-  const n = await extractToInbox({ text, sourceType: 'capture', sourceRef: null, label: 'captura rápida' })
+  // Lo que apuntas tú entra directo en tu lista: no pasa por «Nuevo detectado».
+  const n = await extractToInbox({ text, sourceType: 'capture', sourceRef: null, label: 'captura rápida', status: 'active' })
   dataChanged('items')
   return n
 }
@@ -271,7 +272,7 @@ export async function sweepConnectors(): Promise<number> {
       isReadOnlyTool(toolName)
         ? { behavior: 'allow', updatedInput: input }
         : { behavior: 'deny', message: 'Este repaso es de solo lectura.' },
-    outputSchema: ITEMS_SCHEMA,
+    outputSchema: TOOL_ITEMS_SCHEMA,
     effort: 'medium',
     maxTurns: 25
   })

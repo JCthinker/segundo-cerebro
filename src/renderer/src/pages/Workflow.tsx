@@ -148,7 +148,7 @@ export function Workflow({ ai }: { ai: AiStatus | null }) {
           ) : (
             <p className="text-[12px] text-faint">Ninguno. Añade una sección «## Permisos» con líneas como «- slack: requiere OK».</p>
           )}
-          <p className="mt-2 text-[11.5px] text-faint">Sin regla: lo que le pides a Claude lo hace solo; solo borrar algo te pide OK.</p>
+          <p className="mt-2 text-[11.5px] text-faint">Sin regla: leer es automático y escribir o enviar algo requiere tu OK.</p>
         </Card>
 
         <Card className="p-3">

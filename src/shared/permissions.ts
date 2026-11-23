@@ -115,6 +115,21 @@ function ruleMatches(pattern: string, toolName: string): boolean {
   return candidates.some((c) => re.test(c))
 }
 
+/**
+ * Qué pasará con un paso del plan: consultar es automático; lo de dentro de la app (apuntar,
+ * marcar como hecha) también; escribir o enviar en una herramienta sigue tus permisos.
+ */
+export function stepEffect(
+  kind: 'read' | 'app' | 'write',
+  tool: string | null,
+  rules: PermissionRule[],
+  opts: { draftsOnly?: boolean } = {}
+): ToolMode {
+  if (kind === 'read' || kind === 'app') return 'auto'
+  const server = serverKey((tool ?? 'herramienta').trim()).replace(/_+/g, '_') || 'herramienta'
+  return decideToolMode(`mcp__${server}__send`, rules, opts).mode
+}
+
 const MODE_RANK: Record<ToolMode, number> = { auto: 0, ask: 1, draft: 2, deny: 3 }
 
 /**
@@ -122,8 +137,7 @@ const MODE_RANK: Record<ToolMode, number> = { auto: 0, ask: 1, draft: 2, deny: 3
  *  - Las herramientas internas de la app (mcp__cerebro__*) son automáticas.
  *  - Si alguna regla coincide, gana la más específica (la última que coincide;
  *    en empate, la más restrictiva).
- *  - Sin regla: lo que pides a Claude se hace solo (leer y escribir). Solo borrar
- *    algo pide tu OK, porque no se puede deshacer.
+ *  - Sin regla: lectura → automático; escribir o enviar algo → requiere tu OK.
  *  - En modo "solo borradores", cualquier escritura pasa a borrador.
  */
 export function decideToolMode(
@@ -150,9 +164,7 @@ export function decideToolMode(
   if (!decided) {
     decided = isReadOnlyTool(toolName)
       ? { mode: 'auto', reason: 'Solo lectura' }
-      : isDestructiveTool(toolName)
-        ? { mode: 'ask', reason: 'Borra algo: necesita tu OK' }
-        : { mode: 'auto', reason: 'Se lo has pedido a Claude' }
+      : { mode: 'ask', reason: 'Escribe o envía algo: necesita tu OK' }
   }
 
   // «Solo borrador» limita lo que escribe o envía; leer sigue permitido.
