@@ -14,6 +14,7 @@ export interface Item {
   sourceType: SourceType
   sourceRef: string | null // id de nota, URL, clave Jira, ruta de archivo…
   sourceSnippet: string | null
+  sourceTool?: string | null // Slack, Gmail, Jira… cuando sale de una herramienta
   createdAt: string
   updatedAt: string
   doneAt: string | null

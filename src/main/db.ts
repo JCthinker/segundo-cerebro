@@ -59,6 +59,9 @@ export function openDb(file: string): void {
   // Notas dentro de notas: columna añadida después; se crea si falta.
   const noteCols = db.prepare('PRAGMA table_info(notes)').all() as { name: string }[]
   if (!noteCols.some((c) => c.name === 'parent_id')) db.exec('ALTER TABLE notes ADD COLUMN parent_id TEXT')
+  // Nombre de la herramienta de donde sale una tarea (Slack, Gmail…): añadido después.
+  const itemCols = db.prepare('PRAGMA table_info(items)').all() as { name: string }[]
+  if (!itemCols.some((c) => c.name === 'source_tool')) db.exec('ALTER TABLE items ADD COLUMN source_tool TEXT')
 }
 
 const now = () => new Date().toISOString()
@@ -178,12 +181,12 @@ export function findAreaByName(name: string | null | undefined): Area | null {
 type ItemRow = {
   id: string; kind: ItemKind; title: string; person: string | null; due_date: string | null; prep_days: number
   area_id: string | null; status: ItemStatus; source_type: SourceType; source_ref: string | null
-  source_snippet: string | null; created_at: string; updated_at: string; done_at: string | null
+  source_snippet: string | null; source_tool: string | null; created_at: string; updated_at: string; done_at: string | null
 }
 const toItem = (r: ItemRow): Item => ({
   id: r.id, kind: r.kind, title: r.title, person: r.person, dueDate: r.due_date, prepDays: r.prep_days,
   areaId: r.area_id, status: r.status, sourceType: r.source_type, sourceRef: r.source_ref,
-  sourceSnippet: r.source_snippet, createdAt: r.created_at, updatedAt: r.updated_at, doneAt: r.done_at
+  sourceSnippet: r.source_snippet, sourceTool: r.source_tool ?? null, createdAt: r.created_at, updatedAt: r.updated_at, doneAt: r.done_at
 })
 
 export function listItems(filter: { status?: ItemStatus[]; kind?: ItemKind[] } = {}): Item[] {
@@ -210,11 +213,11 @@ export function createItem(p: NewItem): Item {
   const id = randomUUID()
   const t = now()
   db.prepare(
-    `INSERT INTO items(id, kind, title, person, due_date, prep_days, area_id, status, source_type, source_ref, source_snippet, created_at, updated_at, done_at)
-     VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO items(id, kind, title, person, due_date, prep_days, area_id, status, source_type, source_ref, source_snippet, source_tool, created_at, updated_at, done_at)
+     VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     id, p.kind, p.title.trim(), p.person ?? null, p.dueDate ?? null, p.prepDays ?? 0, p.areaId ?? null,
-    p.status ?? 'active', p.sourceType ?? 'manual', p.sourceRef ?? null, p.sourceSnippet ?? null, t, t, null
+    p.status ?? 'active', p.sourceType ?? 'manual', p.sourceRef ?? null, p.sourceSnippet ?? null, p.sourceTool ?? null, t, t, null
   )
   return getItem(id)!
 }

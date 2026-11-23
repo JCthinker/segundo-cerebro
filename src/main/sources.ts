@@ -132,14 +132,13 @@ export async function syncConnectorCalendars(force = false): Promise<number> {
 
 
 // ---------- fuentes MCP (Slack, Jira, correo…) → bandeja ----------
-const MAX_NEW = 5
-
 /** Qué merece una tarea: lo mismo para las lecturas programadas y el repaso de la mañana. */
 const WHAT_TO_NOTE = `Qué apuntar:
 - Solo lo que pida una acción del propio usuario según las reglas de «Mi flujo». Si «Mi flujo» dice en qué casos avisar o crear una tarea, limítate a esos casos. Lo informativo, lo que tienen que hacer otros y lo que no encaja en su flujo no se apunta.
-- Un asunto = un elemento. Si del mismo tema se habla en varios canales, hilos, correos o herramientas, júntalo todo en uno solo (en "snippet", el fragmento más claro; en "ref", el enlace principal).
-- Si un asunto ya está en la lista de lo apuntado o descartado, no lo incluyas, aunque venga de otro canal o con otras palabras.
-- Como mucho ${MAX_NEW} elementos, los más importantes. Devolver la lista vacía es lo normal si no hay nada que cumpla esto.`
+- Nunca la misma tarea dos veces, aunque aparezca en varios canales, hilos o herramientas o con otras palabras: apúntala una vez (en "snippet", el fragmento más claro; en "ref", el enlace principal). Varias tareas distintas sobre un mismo asunto sí pueden salir.
+- Si una tarea ya está en la lista de lo apuntado o descartado, no la incluyas, aunque venga de otro canal o con otras palabras.
+- En "tool" pon el nombre de la herramienta de donde sale (Slack, Gmail, Jira, Google Drive…).
+- Devolver la lista vacía es lo normal si no hay nada nuevo que cumpla esto.`
 
 const MCP_PULL_ROLE = `Eres el lector de fuentes del «segundo cerebro». Usas SOLO herramientas de lectura de la herramienta indicada para encontrar lo que pide el usuario.
 - No escribas ni envíes nada.
@@ -166,7 +165,8 @@ export async function syncMcpSource(source: Source): Promise<number> {
       maxTurns: 15
     })
     markAiOk()
-    const n = saveProposals((r.structured as { items: Extracted[] } | null)?.items ?? [], 'mcp', isConnectorName(server) ? connectorLabel(server) : server, MAX_NEW)
+    const tool = isConnectorName(server) ? connectorLabel(server) : server
+    const n = await saveProposals((r.structured as { items: Extracted[] } | null)?.items ?? [], 'mcp', tool, tool)
     db.markSourceSynced(source.id, null)
     dataChanged('items')
     return n
@@ -225,7 +225,7 @@ export async function importFile(path: string): Promise<number> {
       effort: 'low',
       maxTurns: 6
     })
-    const n = saveProposals((r.structured as { items: Extracted[] } | null)?.items ?? [], 'file', name)
+    const n = await saveProposals((r.structured as { items: Extracted[] } | null)?.items ?? [], 'file', name)
     dataChanged('items')
     return n
   }
@@ -275,7 +275,7 @@ export async function sweepConnectors(): Promise<number> {
     effort: 'medium',
     maxTurns: 25
   })
-  const n = saveProposals((r.structured as { items: Extracted[] } | null)?.items ?? [], 'mcp', 'Repaso de la mañana', MAX_NEW)
+  const n = await saveProposals((r.structured as { items: Extracted[] } | null)?.items ?? [], 'mcp', null)
   if (n) dataChanged('items')
   return n
 }

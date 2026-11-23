@@ -1,4 +1,4 @@
-import { onlyNew } from '@shared/dedupe'
+import { onlyNew, toolFromRef } from '@shared/dedupe'
 import type { Item, ItemKind, SourceType } from '@shared/types'
 import * as db from '../db'
 import { baseSystem } from './context'
@@ -13,6 +13,7 @@ export interface Extracted {
   area: string | null
   snippet: string
   ref?: string | null
+  tool?: string | null
 }
 
 export const ITEMS_SCHEMA = {
@@ -25,7 +26,7 @@ export const ITEMS_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['kind', 'title', 'person', 'dueDate', 'prepDays', 'area', 'snippet', 'ref'],
+        required: ['kind', 'title', 'person', 'dueDate', 'prepDays', 'area', 'snippet', 'ref', 'tool'],
         properties: {
           kind: { type: 'string', enum: ['promise', 'deadline', 'task', 'decision'] },
           title: { type: 'string', description: 'Acción breve en infinitivo, p. ej. «Enviar el informe a Ana»' },
@@ -34,7 +35,8 @@ export const ITEMS_SCHEMA = {
           prepDays: { type: 'integer', minimum: 0, description: 'Días de trabajo necesarios antes de la fecha' },
           area: { type: ['string', 'null'], description: 'Una de las áreas del usuario, si encaja' },
           snippet: { type: 'string', description: 'Frase literal del texto de donde sale' },
-          ref: { type: ['string', 'null'], description: 'Enlace o identificador de origen (URL, clave de ticket…), si lo hay' }
+          ref: { type: ['string', 'null'], description: 'Enlace o identificador de origen (URL, clave de ticket…), si lo hay' },
+          tool: { type: ['string', 'null'], description: 'Nombre de la herramienta de donde sale (Slack, Gmail, Jira, Google Drive…); null si es una nota o un texto' }
         }
       }
     }
@@ -49,7 +51,7 @@ const EXTRACT_ROLE = `Eres el extractor del «segundo cerebro» del usuario. Lee
 Reglas:
 - Solo lo que esté en el texto. Si dudas, no lo incluyas.
 - No dupliques lo que ya existe en la lista de elementos conocidos ni lo que el usuario descartó.
-- Un asunto = un elemento: si el mismo tema aparece varias veces en el texto, júntalo en uno.
+- Nunca la misma tarea dos veces con otras palabras. Varias tareas distintas sobre un mismo asunto sí pueden salir.
 - Si el usuario es quien recibe la promesa de otra persona, no es una promesa suya: como mucho, una tarea de seguimiento si lo pide el texto.
 - Usa las reglas de «Mi flujo» para estimar plazos implícitos y márgenes de preparación (por ejemplo, «lo que pide Marta tiene 48 horas»).`
 
@@ -70,7 +72,7 @@ export async function extractToInbox(p: {
     effort: 'low',
     maxTurns: 3
   })
-  return saveProposals((r.structured as { items: Extracted[] } | null)?.items ?? [], p.sourceType, p.sourceRef)
+  return await saveProposals((r.structured as { items: Extracted[] } | null)?.items ?? [], p.sourceType, p.sourceRef)
 }
 
 /** Lo que ya existe o se descartó hace poco: con esto se evita volver a proponerlo. */
@@ -89,13 +91,48 @@ export function knownForPrompt(): string {
   return `Ya apuntado (no lo repitas, aunque aparezca en otro canal):\n${open.join('\n') || '(nada)'}\n\nYa hecho o descartado por el usuario (no lo vuelvas a proponer):\n${closed.join('\n') || '(nada)'}`
 }
 
+const SAME_TASK_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['repetidas'],
+  properties: { repetidas: { type: 'array', items: { type: 'integer' }, description: 'Números de las propuestas nuevas que repiten una tarea ya apuntada o de la misma lista' } }
+} as const
+
 /**
- * Guarda lo detectado como propuestas en la bandeja, sin repetir asuntos que ya existan
- * (aunque estén redactados distinto o vengan de otro canal). Con `max`, como mucho esas.
+ * Segunda comprobación con Claude: quita las propuestas que son la misma tarea que otra
+ * (ya apuntada o de la misma tanda) dicha con otras palabras. Si falla, se queda con todo.
  */
-export function saveProposals(items: Extracted[], sourceType: SourceType, sourceRef: string | null, max?: number): number {
-  const candidates = items.map((x) => ({ ...x, sourceRef: x.ref || sourceRef, sourceSnippet: x.snippet || null }))
-  const fresh = onlyNew(candidates, existingForDedupe(), max)
+async function dropRewordings<T extends { title: string; person?: string | null }>(candidates: T[], existing: Item[]): Promise<T[]> {
+  if (!candidates.length || (candidates.length < 2 && !existing.length)) return candidates
+  const prev = existing.slice(0, 150).map((i) => `- ${i.title}${i.person ? ` (${i.person})` : ''}`).join('\n')
+  const next = candidates.map((c, n) => `${n + 1}. ${c.title}${c.person ? ` (${c.person})` : ''}`).join('\n')
+  try {
+    const r = await runAgent({
+      system:
+        'Comparas listas de tareas. Una propuesta es repetida solo si pide hacer LO MISMO que otra tarea, aunque esté dicha con otras palabras. Dos tareas distintas sobre el mismo asunto o el mismo ticket NO son repetidas (por ejemplo, «Estimar FP-12» y «Describir FP-12»). Dentro de las propuestas nuevas, si dos son la misma, marca solo la segunda.',
+      prompt: `Tareas ya apuntadas o descartadas:\n${prev || '(ninguna)'}\n\nPropuestas nuevas:\n${next}`,
+      outputSchema: SAME_TASK_SCHEMA,
+      effort: 'low',
+      maxTurns: 2
+    })
+    const drop = new Set((r.structured as { repetidas: number[] } | null)?.repetidas ?? [])
+    return candidates.filter((_, n) => !drop.has(n + 1))
+  } catch {
+    return candidates
+  }
+}
+
+/**
+ * Guarda lo detectado como propuestas en la bandeja, sin repetir tareas que ya existan
+ * o se hayan descartado, aunque estén redactadas con otras palabras.
+ */
+export async function saveProposals(items: Extracted[], sourceType: SourceType, sourceRef: string | null, sourceTool: string | null = null): Promise<number> {
+  const existing = existingForDedupe()
+  const candidates = items.map((x) => {
+    const ref = x.ref || sourceRef
+    return { ...x, sourceRef: ref, sourceSnippet: x.snippet || null, sourceTool: x.tool?.trim() || sourceTool || toolFromRef(ref) }
+  })
+  const fresh = await dropRewordings(onlyNew(candidates, existing), existing)
   for (const x of fresh) {
     const due = x.dueDate && /^\d{4}-\d{2}-\d{2}$/.test(x.dueDate) ? x.dueDate : null
     db.createItem({
@@ -108,7 +145,8 @@ export function saveProposals(items: Extracted[], sourceType: SourceType, source
       status: 'proposed',
       sourceType,
       sourceRef: x.sourceRef,
-      sourceSnippet: x.sourceSnippet
+      sourceSnippet: x.sourceSnippet,
+      sourceTool: x.sourceTool
     })
   }
   return fresh.length

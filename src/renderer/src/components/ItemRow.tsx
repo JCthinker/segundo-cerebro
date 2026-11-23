@@ -1,5 +1,6 @@
 import type { Area, Item, ScoredItem } from '@shared/types'
 import { formatRelative } from '@shared/dates'
+import { toolFromRef } from '@shared/dedupe'
 import { call } from '../api'
 import { useNav } from '../nav'
 import { Button, Icon, Pill } from './ui'
@@ -25,21 +26,23 @@ export function SourceLine({ item }: { item: Item }) {
   const label: Record<Item['sourceType'], string> = {
     note: 'Nota', capture: 'Captura', calendar: 'Calendario', file: 'Archivo', transcript: 'Acta', mcp: 'Herramienta', manual: 'Manual'
   }
+  // Lo que sale de una herramienta muestra su nombre (Slack, Gmail, Jira…).
+  const name = item.sourceType === 'mcp' ? item.sourceTool || toolFromRef(item.sourceRef) || label.mcp : label[item.sourceType]
   const isUrl = item.sourceRef && /^https?:\/\//.test(item.sourceRef)
   return (
     <div className="mt-0.5 truncate text-[12px] text-faint">
       {item.sourceType === 'note' && item.sourceRef ? (
         <button className="hover:text-ink hover:underline" onClick={() => go('notes', item.sourceRef!)}>
-          {label[item.sourceType]}
+          {name}
         </button>
       ) : isUrl ? (
         <button className="hover:text-ink hover:underline" onClick={() => call('shell.open', item.sourceRef)}>
-          {label[item.sourceType]}
+          {name}
         </button>
       ) : (
         <span>
-          {label[item.sourceType]}
-          {item.sourceRef && item.sourceType !== 'note' ? ` «${item.sourceRef}»` : ''}
+          {name}
+          {item.sourceRef && item.sourceType !== 'note' && item.sourceRef !== name ? ` «${item.sourceRef}»` : ''}
         </span>
       )}
       {item.sourceSnippet ? <span> · «{item.sourceSnippet}»</span> : null}
