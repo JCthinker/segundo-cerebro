@@ -62,9 +62,12 @@ describe('decideToolMode', () => {
     expect(decideToolMode('mcp__jira__delete_issue', rules).mode).toBe('deny')
   })
 
-  it('por defecto: lectura automática y escritura con OK', () => {
+  it('por defecto: lo que pides se hace solo; borrar pide OK', () => {
     expect(decideToolMode('mcp__github__list_issues', []).mode).toBe('auto')
-    expect(decideToolMode('mcp__github__create_issue', []).mode).toBe('ask')
+    expect(decideToolMode('mcp__github__create_issue', []).mode).toBe('auto')
+    expect(decideToolMode('mcp__slack__send_message', []).mode).toBe('auto')
+    expect(decideToolMode('mcp__github__delete_issue', []).mode).toBe('ask')
+    expect(decideToolMode('mcp__claude_ai_Gmail__trash_thread', []).mode).toBe('ask')
   })
 
   it('el modo solo borradores convierte escrituras en borrador pero no relaja prohibiciones', () => {
@@ -83,7 +86,7 @@ describe('conexiones de la cuenta de claude.ai', () => {
   it('crear un borrador está permitido con «solo borrador» y en modo borradores', () => {
     expect(decideToolMode('mcp__claude_ai_Gmail__create_draft', rules).mode).toBe('auto')
     expect(decideToolMode('mcp__claude_ai_Gmail__create_draft', [], { draftsOnly: true }).mode).toBe('auto')
-    expect(decideToolMode('mcp__claude_ai_Gmail__create_draft', []).mode).toBe('ask')
+    expect(decideToolMode('mcp__claude_ai_Gmail__create_draft', []).mode).toBe('auto')
   })
   it('leer sigue siendo automático y prohibido gana', () => {
     expect(decideToolMode('mcp__claude_ai_Gmail__search_threads', rules).mode).toBe('auto')

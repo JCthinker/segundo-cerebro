@@ -17,7 +17,8 @@ Todo se rige por **Mi flujo**: una página viva que escribes tú, con tus priori
 | --- | --- |
 | **Dashboard** | La pantalla principal: lo atrasado, lo de hoy (por prioridad) con tus reuniones, y una tarjeta por cada uno de los próximos 6 días. Cada cosa aparece el día en que tienes que **empezarla** (fecha límite menos días de preparación). Debajo: lo nuevo que ha detectado Claude para confirmar, lo de más adelante y lo que no tiene fecha. Arriba, una caja para apuntar algo o preguntar. |
 | **Notas** | Editor de bloques. Mientras escribes, Claude detecta lo que tienes que hacer y te lo propone en el dashboard. |
-| **Ajustes** | Tres pestañas: General (Claude, áreas, brief), **Entradas** (calendarios, archivos, herramientas y registro) y **Mi flujo** (tus reglas, con historial y exportación como skill). |
+| **Notas** | Tus notas, y arriba del todo **Mi flujo**: una página fija (se edita, no se borra) con tus reglas, historial y exportación como skill. |
+| **Ajustes** | Dos pestañas: General (Claude, áreas, brief) y **Entradas** (calendarios, archivos, herramientas y registro). |
 
 **Captura rápida:** desde cualquier app, con ⌥ Espacio (o ⌘ ⇧ Espacio si el primero está ocupado).
 

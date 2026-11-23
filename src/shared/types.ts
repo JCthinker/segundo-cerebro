@@ -15,6 +15,10 @@ export interface Item {
   sourceRef: string | null // id de nota, URL, clave Jira, ruta de archivo…
   sourceSnippet: string | null
   sourceTool?: string | null // Slack, Gmail, Jira… cuando sale de una herramienta
+  /** Explicación corta: qué ha pasado, por qué te toca y qué hay que hacer. */
+  context?: string | null
+  /** Por qué lo descartaste (para que Claude aprenda qué no proponerte). */
+  dismissReason?: string | null
   createdAt: string
   updatedAt: string
   doneAt: string | null
@@ -141,6 +145,17 @@ export interface ClaudeConnector {
   status: string // connected | needs-auth | failed | pending
   tools: number
   enabled: boolean
+}
+
+/** Cuánto llevas gastado de tu plan de Claude (solo con cuenta de Claude, no con API key). */
+export interface ClaudeUsage {
+  available: boolean
+  /** pro, max, team… */
+  plan: string | null
+  /** Límites del plan: % usado y cuándo se reinicia. */
+  windows: { label: string; percent: number; resetsAt: string | null }[]
+  checkedAt: string
+  detail?: string
 }
 
 export interface AiStatus {

@@ -87,6 +87,11 @@ export function isDraftTool(toolName: string): boolean {
   return w.includes('draft') && !w.some((x) => ['send', 'delete', 'remove', 'trash', 'publish'].includes(x))
 }
 
+/** Herramientas que borran algo (no se puede deshacer). */
+export function isDestructiveTool(toolName: string): boolean {
+  return words(shortToolName(toolName)).some((x) => ['delete', 'remove', 'trash', 'destroy', 'purge'].includes(x))
+}
+
 export function shortToolName(toolName: string): string {
   const m = toolName.match(/^mcp__.+?__(.+)$/)
   return m ? m[1] : toolName
@@ -117,7 +122,8 @@ const MODE_RANK: Record<ToolMode, number> = { auto: 0, ask: 1, draft: 2, deny: 3
  *  - Las herramientas internas de la app (mcp__cerebro__*) son automáticas.
  *  - Si alguna regla coincide, gana la más específica (la última que coincide;
  *    en empate, la más restrictiva).
- *  - Sin regla: lectura → automático; escritura → requiere OK.
+ *  - Sin regla: lo que pides a Claude se hace solo (leer y escribir). Solo borrar
+ *    algo pide tu OK, porque no se puede deshacer.
  *  - En modo "solo borradores", cualquier escritura pasa a borrador.
  */
 export function decideToolMode(
@@ -144,7 +150,9 @@ export function decideToolMode(
   if (!decided) {
     decided = isReadOnlyTool(toolName)
       ? { mode: 'auto', reason: 'Solo lectura' }
-      : { mode: 'ask', reason: 'Escribe o envía algo: necesita tu OK' }
+      : isDestructiveTool(toolName)
+        ? { mode: 'ask', reason: 'Borra algo: necesita tu OK' }
+        : { mode: 'auto', reason: 'Se lo has pedido a Claude' }
   }
 
   // «Solo borrador» limita lo que escribe o envía; leer sigue permitido.

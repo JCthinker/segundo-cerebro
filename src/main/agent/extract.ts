@@ -12,6 +12,7 @@ export interface Extracted {
   prepDays: number
   area: string | null
   snippet: string
+  context?: string | null
   ref?: string | null
   tool?: string | null
 }
@@ -26,12 +27,17 @@ export const ITEMS_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['kind', 'title', 'person', 'dueDate', 'prepDays', 'area', 'snippet', 'ref', 'tool'],
+        required: ['kind', 'title', 'context', 'person', 'dueDate', 'prepDays', 'area', 'snippet', 'ref', 'tool'],
         properties: {
           kind: { type: 'string', enum: ['promise', 'deadline', 'task', 'decision'] },
           title: { type: 'string', description: 'Acción breve en infinitivo, p. ej. «Enviar el informe a Ana»' },
+          context: {
+            type: 'string',
+            description:
+              'Una o dos frases para el usuario, en segunda persona: qué ha pasado, por qué le toca a él y qué tiene que hacer exactamente (p. ej. «Ana preguntó en #producto si el informe estará el jueves. Le dijiste que sí: envíaselo por correo antes del jueves.»)'
+          },
           person: { type: ['string', 'null'], description: 'A quién se le prometió o de quién depende' },
-          dueDate: { type: ['string', 'null'], description: 'YYYY-MM-DD; resuelve fechas relativas respecto a hoy' },
+          dueDate: { type: ['string', 'null'], description: 'YYYY-MM-DD; resuelve fechas relativas respecto a hoy. null si no hay fecha (se pondrá mañana)' },
           prepDays: { type: 'integer', minimum: 0, description: 'Días de trabajo necesarios antes de la fecha' },
           area: { type: ['string', 'null'], description: 'Una de las áreas del usuario, si encaja' },
           snippet: { type: 'string', description: 'Frase literal del texto de donde sale' },
@@ -82,13 +88,28 @@ export function existingForDedupe(): Item[] {
   return [...db.listItems({ status: ['proposed', 'active'] }), ...recentClosed]
 }
 
+/** Lo descartado con motivo en los últimos 90 días: de aquí aprende Claude qué no proponer. */
+export function dismissedWithReason(limit = 40): Item[] {
+  const since = new Date(Date.now() - 90 * 86_400_000).toISOString()
+  return db
+    .listItems({ status: ['dismissed'] })
+    .filter((i) => i.dismissReason && i.updatedAt >= since)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .slice(0, limit)
+}
+
 /** Lista para el prompt: lo pendiente y lo descartado, para que Claude no lo repita. */
 export function knownForPrompt(): string {
   const line = (i: Item) => `- ${i.title}${i.person ? ` (${i.person})` : ''}${i.dueDate ? ` · ${i.dueDate}` : ''}`
   const all = existingForDedupe()
   const open = all.filter((i) => i.status === 'proposed' || i.status === 'active').slice(0, 80).map(line)
   const closed = all.filter((i) => i.status !== 'proposed' && i.status !== 'active').slice(0, 40).map(line)
-  return `Ya apuntado (no lo repitas, aunque aparezca en otro canal):\n${open.join('\n') || '(nada)'}\n\nYa hecho o descartado por el usuario (no lo vuelvas a proponer):\n${closed.join('\n') || '(nada)'}`
+  const lessons = dismissedWithReason().map((i) => `- «${i.title}»${i.sourceTool ? ` (de ${i.sourceTool})` : ''}: ${i.dismissReason}`)
+  return `Ya apuntado (no lo repitas, aunque aparezca en otro canal):\n${open.join('\n') || '(nada)'}\n\nYa hecho o descartado por el usuario (no lo vuelvas a proponer):\n${closed.join('\n') || '(nada)'}${
+    lessons.length
+      ? `\n\nPropuestas que el usuario descartó y por qué. Aprende de estos motivos: no propongas nada parecido por la misma razón.\n${lessons.join('\n')}`
+      : ''
+  }`
 }
 
 const SAME_TASK_SCHEMA = {
@@ -146,7 +167,8 @@ export async function saveProposals(items: Extracted[], sourceType: SourceType, 
       sourceType,
       sourceRef: x.sourceRef,
       sourceSnippet: x.sourceSnippet,
-      sourceTool: x.sourceTool
+      sourceTool: x.sourceTool,
+      context: x.context?.trim() || null
     })
   }
   return fresh.length

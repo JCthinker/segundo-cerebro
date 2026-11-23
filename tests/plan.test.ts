@@ -57,3 +57,15 @@ describe('planDays', () => {
     expect(plan.days[2].events.map((e) => e.id)).toEqual(['festivo'])
   })
 })
+
+import { defaultDueDate } from '@shared/dates'
+describe('fecha por defecto', () => {
+  it('lo que llega sin fecha vence mañana', () => {
+    expect(defaultDueDate('task', null, '2026-11-23')).toBe('2026-11-24')
+    expect(defaultDueDate('promise', undefined, '2026-11-30')).toBe('2026-12-01')
+  })
+  it('respeta la fecha que ya tiene y no pone fecha a las decisiones', () => {
+    expect(defaultDueDate('task', '2026-12-05', '2026-11-23')).toBe('2026-12-05')
+    expect(defaultDueDate('decision', null, '2026-11-23')).toBeNull()
+  })
+})

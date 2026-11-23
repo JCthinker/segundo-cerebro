@@ -36,3 +36,9 @@ export function formatRelative(today: string, due: string): string {
   if (n < 7) return `en ${n} días`
   return parseDay(due).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
 }
+
+/** Fecha que se pone a lo que llega sin fecha: el día siguiente. Las decisiones no llevan fecha. */
+export function defaultDueDate(kind: string, dueDate: string | null | undefined, today: string): string | null {
+  if (dueDate) return dueDate
+  return kind === 'decision' ? null : addDays(today, 1)
+}

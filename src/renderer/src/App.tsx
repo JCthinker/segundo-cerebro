@@ -10,7 +10,8 @@ import { Icon } from './components/ui'
 import { Onboarding } from './Onboarding'
 import { Dashboard } from './pages/Dashboard'
 import { Notes } from './pages/Notes'
-import { Workflow } from './pages/Workflow'
+import { WORKFLOW_NOTE_ID } from './pages/Workflow'
+import { UsageMeter } from './components/UsageMeter'
 import { Sources } from './pages/Sources'
 import { Settings } from './pages/Settings'
 
@@ -22,8 +23,7 @@ const NAV: { page: Page; label: string; icon: Parameters<typeof Icon>[0]['name']
 /** Ajustes agrupa lo que se configura una vez: Claude, de dónde sale el contexto y tus reglas. */
 const SETTINGS_TABS: { page: Page; label: string }[] = [
   { page: 'settings', label: 'General' },
-  { page: 'sources', label: 'Entradas' },
-  { page: 'workflow', label: 'Mi flujo' }
+  { page: 'sources', label: 'Entradas' }
 ]
 const isSettings = (p: Page) => SETTINGS_TABS.some((t) => t.page === p)
 
@@ -50,6 +50,12 @@ export function App() {
   }, [settings?.onboarded, ai])
 
   const go = useCallback((p: Page, prm?: string) => {
+    // Mi flujo vive ahora dentro de Notas, como una página fija.
+    if (p === 'workflow') {
+      setPage('notes')
+      setParam(WORKFLOW_NOTE_ID)
+      return
+    }
     setPage(p)
     setParam(prm ?? null)
   }, [])
@@ -103,6 +109,7 @@ export function App() {
               <span className={`h-1.5 w-1.5 rounded-full ${ai?.ok ? 'bg-success' : ai ? 'bg-danger' : 'bg-faint'}`} />
               {ai?.ok ? 'Claude conectado' : ai ? 'Claude sin conexión' : 'Comprobando Claude…'}
             </button>
+            {ai?.ok && settings.aiMode === 'claude-code' ? <UsageMeter /> : null}
           </div>
         </aside>
 
@@ -133,7 +140,6 @@ export function App() {
             ) : null}
             {page === 'today' && <Dashboard ai={ai} shortcut={settings.shortcut} />}
             {page === 'notes' && <Notes ai={ai} />}
-            {page === 'workflow' && <Workflow ai={ai} />}
             {page === 'sources' && <Sources ai={ai} />}
             {page === 'settings' && <Settings ai={ai} onAi={setAi} />}
           </div>

@@ -88,6 +88,7 @@ export function ItemRow({
         <button className="text-left font-medium hover:underline" onClick={() => editItem(item)}>
           {item.title}
         </button>
+        {item.context ? <div className={`text-[12.5px] leading-snug text-muted ${compact ? 'line-clamp-2' : ''}`}>{item.context}</div> : null}
         {reasons ? <div className="text-[12.5px] text-muted">{reasons}</div> : null}
         {!compact ? <SourceLine item={item} /> : null}
       </div>

@@ -4,6 +4,7 @@ import { KIND_LABEL } from "@shared/types";
 import { deleteNoteQuestion } from "@shared/notes";
 import { call, useAction, useData } from "../api";
 import { NoteEditor } from "../components/Editor";
+import { DismissButton } from "../components/Dismiss";
 import { DuePill } from "../components/ItemRow";
 import {
   Button,
@@ -15,6 +16,7 @@ import {
   Spinner,
 } from "../components/ui";
 import { useNav } from "../nav";
+import { Workflow, WORKFLOW_NOTE_ID } from "./Workflow";
 
 const EXTRACT_AFTER_MS = 4000;
 
@@ -250,6 +252,16 @@ export function Notes({ ai }: { ai: AiStatus | null }) {
                   Suelta aquí para sacarla fuera
                 </div>
               ) : null}
+              <button
+                onClick={() => go("notes", WORKFLOW_NOTE_ID)}
+                className={`mb-0.5 flex w-full items-center gap-1.5 rounded-lg py-1.5 pr-1 pl-1.5 text-left ${
+                  selected === WORKFLOW_NOTE_ID ? "bg-selected" : "hover:bg-hover"
+                }`}
+                title="Cómo trabajas: Claude lo lee siempre. Se puede editar, no borrar."
+              >
+                <Icon name="route" className="h-3.5 w-3.5 text-clay" />
+                <span className="truncate text-[13px] font-medium">Mi flujo</span>
+              </button>
               {roots.map((n) => row(n, 0))}
               {!roots.length ? (
                 <p className="px-2 py-4 text-[12.5px] text-faint">
@@ -266,7 +278,9 @@ export function Notes({ ai }: { ai: AiStatus | null }) {
         </div>
       </aside>
       <section className="min-w-0 flex-1 overflow-y-auto">
-        {selected ? (
+        {selected === WORKFLOW_NOTE_ID ? (
+          <Workflow ai={ai} />
+        ) : selected ? (
           <NoteView
             key={selected}
             id={selected}
@@ -462,15 +476,7 @@ function NoteView({
               <DuePill item={i} />
               {i.status === "proposed" ? (
                 <>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() =>
-                      call("items.update", i.id, { status: "dismissed" })
-                    }
-                  >
-                    Descartar
-                  </Button>
+                  <DismissButton item={i} label="Descartar" />
                   <Button
                     size="sm"
                     variant="primary"

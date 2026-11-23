@@ -1,6 +1,7 @@
 import * as db from '../db'
 import { baseSystem } from './context'
 import { runAgent } from './client'
+import { dismissedWithReason } from './extract'
 
 export interface RuleSuggestion {
   section: string
@@ -42,12 +43,15 @@ export async function suggestRules(): Promise<RuleSuggestion[]> {
     .slice(0, 80)
     .map((i) => `- [${i.kind}/${i.status}] ${i.title}${i.person ? ` · ${i.person}` : ''}${i.dueDate ? ` · ${i.dueDate}` : ''}`)
     .join('\n')
+  const dismissed = dismissedWithReason(60)
+    .map((i) => `- «${i.title}»${i.sourceTool ? ` (de ${i.sourceTool})` : ''}: ${i.dismissReason}`)
+    .join('\n')
 
   const r = await runAgent({
     system: baseSystem(
-      `Ayudas al usuario a mantener su página «Mi flujo». Busca patrones REPETIDOS (al menos dos veces) en sus notas y compromisos que todavía no estén escritos en Mi flujo: plazos habituales de ciertas personas, tipos de tareas que siempre se retrasan, rituales implícitos, prioridades que se ven en la práctica. No propongas nada que ya esté. Si no hay patrones claros, devuelve una lista vacía.`
+      `Ayudas al usuario a mantener su página «Mi flujo». Busca patrones REPETIDOS (al menos dos veces) en sus notas y compromisos que todavía no estén escritos en Mi flujo: plazos habituales de ciertas personas, tipos de tareas que siempre se retrasan, rituales implícitos, prioridades que se ven en la práctica. Fíjate también en los motivos por los que descarta propuestas: si se repiten, conviértelos en una regla de qué NO apuntarle (sección «Reglas»). No propongas nada que ya esté. Si no hay patrones claros, devuelve una lista vacía.`
     ),
-    prompt: `Notas recientes:\n${notes || '(ninguna)'}\n\nCompromisos:\n${items || '(ninguno)'}`,
+    prompt: `Notas recientes:\n${notes || '(ninguna)'}\n\nCompromisos:\n${items || '(ninguno)'}\n\nPropuestas descartadas y su motivo:\n${dismissed || '(ninguna)'}`,
     outputSchema: SCHEMA,
     effort: 'medium',
     maxTurns: 3

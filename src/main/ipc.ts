@@ -14,6 +14,7 @@ import { dayRange, generateBrief } from './agent/brief'
 import { extractToInbox } from './agent/extract'
 import { cancelRun, startResolve } from './agent/resolve'
 import { ask, type ChatMessage } from './agent/ask'
+import { claudeUsage } from './agent/usage'
 import { answerApproval } from './agent/permissions-gate'
 import { appendToSection, suggestRules } from './agent/suggest-rules'
 import { capture, connectorEventsSourceId, importFile, importTranscript, isCalendarConnector, syncConnectorCalendars, syncIcs, syncMcpSource } from './sources'
@@ -70,6 +71,7 @@ const api: Record<string, (...args: any[]) => unknown> = {
   'update.check': () => checkForUpdate(),
   'update.install': () => installNow(),
   'ai.test': () => testAi(),
+  'ai.usage': (refresh?: boolean) => claudeUsage(!!refresh),
   'onboarding.finish': (opts: { demo: boolean }) => {
     if (db.isEmpty()) (opts.demo ? seedDemo : seedTemplateOnly)()
     updateSettings({ onboarded: true })

@@ -19,6 +19,10 @@ const MODE_TONE: Record<PermissionRule['mode'], 'success' | 'warning' | 'info' |
   deny: 'danger'
 }
 
+/** Id con el que se abre Mi flujo dentro de Notas. */
+export const WORKFLOW_NOTE_ID = 'mi-flujo'
+
+/** Mi flujo, mostrado como una página fija de Notas: se puede editar pero no borrar. */
 export function Workflow({ ai }: { ai: AiStatus | null }) {
   const { data: wf, reload } = useData<{ markdown: string; version: number; updatedAt: string | null }>('workflow.get', [], ['workflow'])
   const { data: versions = [] } = useData<{ version: number; createdAt: string; preview: string }[]>('workflow.versions', [], ['workflow'])
@@ -56,13 +60,13 @@ export function Workflow({ ai }: { ai: AiStatus | null }) {
   }
 
   return (
-    <div className="flex gap-8">
-      <div className="min-w-0 flex-1">
+    <div className="mx-auto max-w-3xl px-10 pt-10 pb-24">
+      <div>
         <div className="mb-4 flex items-center gap-2">
           <div>
-            <h1 className="text-[22px] font-semibold tracking-tight">Mi flujo</h1>
+            <h1 className="text-[28px] font-semibold tracking-tight">Mi flujo</h1>
             <p className="text-[13px] text-muted">
-              Cómo trabajas, en tus palabras. Claude lo lee antes de cada brief y cada vez que actúa por ti, como si fuera un skill.
+              Cómo trabajas, en tus palabras. Claude lo lee antes de cada brief y cada vez que actúa por ti. Esta página no se puede borrar.
             </p>
           </div>
           <div className="ml-auto flex shrink-0 gap-1.5">
@@ -84,7 +88,7 @@ export function Workflow({ ai }: { ai: AiStatus | null }) {
         </div>
         <ErrorNote>{save.error}</ErrorNote>
 
-        <Card className="p-6">
+        <div className="py-2">
           {mode === 'edit' ? (
             <textarea
               autoFocus
@@ -97,21 +101,21 @@ export function Workflow({ ai }: { ai: AiStatus | null }) {
                 }
               }}
               spellCheck
-              className="min-h-[65vh] w-full resize-none bg-transparent font-mono text-[13.5px] leading-relaxed outline-none"
+              className="min-h-[65vh] w-full resize-none rounded-lg border border-line bg-transparent p-4 font-mono text-[13.5px] leading-relaxed outline-none"
             />
           ) : (
             <div onDoubleClick={() => setMode('edit')} title="Doble clic para editar">
               <Markdown text={text || '*Vacío.* Pulsa «Editar» para escribir tu flujo.'} />
             </div>
           )}
-        </Card>
+        </div>
         <p className="mt-2 text-[12px] text-faint">
           Versión {wf?.version ?? 0}
           {wf?.updatedAt ? ` · editado el ${new Date(wf.updatedAt).toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' })}` : ''} · ⌘S para guardar
         </p>
       </div>
 
-      <aside className="w-72 shrink-0 space-y-4 pt-16">
+      <aside className="mt-10 grid grid-cols-1 gap-4 border-t border-line pt-6 md:grid-cols-2">
         {headings.length ? (
           <div>
             <div className="mb-1 text-[12px] font-medium text-muted">Secciones</div>
@@ -144,7 +148,7 @@ export function Workflow({ ai }: { ai: AiStatus | null }) {
           ) : (
             <p className="text-[12px] text-faint">Ninguno. Añade una sección «## Permisos» con líneas como «- slack: requiere OK».</p>
           )}
-          <p className="mt-2 text-[11.5px] text-faint">Sin regla: leer es automático y escribir requiere tu OK.</p>
+          <p className="mt-2 text-[11.5px] text-faint">Sin regla: lo que le pides a Claude lo hace solo; solo borrar algo te pide OK.</p>
         </Card>
 
         <Card className="p-3">

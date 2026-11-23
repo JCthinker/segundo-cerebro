@@ -13,7 +13,7 @@ const RESOLVE_ROLE = `Eres el asistente personal del usuario y ahora vas a RESOL
 Forma de trabajar:
 1. Busca contexto primero (notas, elementos, herramientas de lectura) para entender qué hay que hacer.
 2. Explica en una frase tu plan antes de actuar.
-3. Ejecuta los pasos. Las acciones que escriben o envían algo pasan por los permisos del usuario: algunas se ejecutan solas, otras esperan su OK y otras solo se dejan en borrador. Si una acción se rechaza o queda en borrador, no insistas: sigue con lo demás.
+3. Ejecuta los pasos directamente: el usuario te lo ha pedido, así que no le pidas confirmación por escrito. Solo se frenan las acciones que «Mi flujo» marca como prohibidas, solo borrador o que requieren OK; si una se rechaza o queda en borrador, no insistas: sigue con lo demás.
 4. Si la tarea queda resuelta de verdad, márcala como hecha con cerebro update_item (status "done"). Si solo quedaron borradores, no la marques.
 5. Termina con un resumen corto: qué hiciste, qué quedó en borrador (con el texto completo del borrador) y qué tiene que hacer el usuario.
 No inventes datos: si te falta algo, dilo.`
@@ -32,7 +32,7 @@ export function startResolve(itemId: string | null, goal: string, mode: 'normal'
   const itemText = item
     ? `Elemento a resolver (id ${item.id}):
 - Tipo: ${KIND_LABEL[item.kind]}
-- Título: ${item.title}
+- Título: ${item.title}${item.context ? `\n- Contexto: ${item.context}` : ''}
 - Persona: ${item.person ?? '—'}
 - Vence: ${item.dueDate ?? 'sin fecha'}
 - Origen: ${item.sourceType}${item.sourceRef ? ` (${item.sourceRef})` : ''}${item.sourceSnippet ? `\n- Frase de origen: «${item.sourceSnippet}»` : ''}`

@@ -3,6 +3,7 @@ import type { AiStatus, Brief, CalendarEvent, Item, ScoredItem, TodayView } from
 import { formatDayLong, parseDay } from '@shared/dates'
 import { planDays, type DayPlan, type PlanEntry } from '@shared/plan'
 import { call, useAction, useData } from '../api'
+import { DismissButton } from '../components/Dismiss'
 import { ItemRow, SourceLine } from '../components/ItemRow'
 import { Markdown } from '../components/Markdown'
 import { Button, Card, ErrorNote, Icon, inputCls, Pill, SectionLabel, Spinner, textareaCls } from '../components/ui'
@@ -82,7 +83,7 @@ export function Dashboard({ ai, shortcut }: { ai: AiStatus | null; shortcut: str
       <SectionLabel>Hoy</SectionLabel>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
         <Card className="px-4 lg:col-span-3">
-          {top.length || todayRest.length ? (
+          {top.length || todayRest.length || undated.length ? (
             <>
               {top.map(({ s, why }, i) => (
                 <ItemRow key={s.item.id} scored={s} areas={areas} index={i + 1} why={why} />
@@ -90,6 +91,14 @@ export function Dashboard({ ai, shortcut }: { ai: AiStatus | null; shortcut: str
               {todayRest.map((e) => (
                 <ItemRow key={e.s.item.id} scored={e.s} areas={areas} why={e.note ?? undefined} compact />
               ))}
+              {undated.length ? (
+                <>
+                  <div className="border-b border-line pt-3 pb-1 text-[11.5px] font-medium tracking-wide text-faint uppercase">Sin fecha</div>
+                  {undated.map((s) => (
+                    <ItemRow key={s.item.id} scored={s} areas={areas} compact />
+                  ))}
+                </>
+              ) : null}
             </>
           ) : (
             <div className="py-6 text-center text-[13px] text-muted">Nada pendiente para hoy.</div>
@@ -113,29 +122,15 @@ export function Dashboard({ ai, shortcut }: { ai: AiStatus | null; shortcut: str
 
       <Detected items={data.proposed} />
 
-      {later.length || undated.length ? (
-        <div className="grid grid-cols-1 gap-x-6 lg:grid-cols-2">
-          {later.length ? (
-            <div>
-              <SectionLabel>Más adelante</SectionLabel>
-              <Card className="px-3 py-1">
-                {later.map((e) => (
-                  <MiniRow key={e.s.item.id} s={e.s} note={e.note} />
-                ))}
-              </Card>
-            </div>
-          ) : null}
-          {undated.length ? (
-            <div>
-              <SectionLabel>Sin fecha</SectionLabel>
-              <Card className="px-3 py-1">
-                {undated.map((s) => (
-                  <MiniRow key={s.item.id} s={s} note={null} />
-                ))}
-              </Card>
-            </div>
-          ) : null}
-        </div>
+      {later.length ? (
+        <>
+          <SectionLabel>Más adelante</SectionLabel>
+          <Card className="px-3 py-1">
+            {later.map((e) => (
+              <MiniRow key={e.s.item.id} s={e.s} note={e.note} />
+            ))}
+          </Card>
+        </>
       ) : null}
       <div className="h-10" />
     </div>
@@ -295,7 +290,7 @@ function MiniRow({ s, note }: { s: ScoredItem; note: string | null }) {
         <Icon name="check" className="h-2.5 w-2.5" />
       </button>
       <div className="min-w-0 flex-1">
-        <button className="text-left hover:underline" onClick={() => editItem(item)}>
+        <button className="text-left hover:underline" onClick={() => editItem(item)} title={item.context ?? undefined}>
           {item.title}
           {item.person ? <span className="text-clay"> → {item.person}</span> : null}
         </button>
@@ -309,7 +304,6 @@ function Detected({ items }: { items: Item[] }) {
   const { editItem } = useNav()
   if (!items.length) return null
   const confirm = (i: Item) => call('items.update', i.id, { status: 'active' })
-  const dismiss = (i: Item) => call('items.update', i.id, { status: 'dismissed' })
   return (
     <>
       <SectionLabel
@@ -332,16 +326,15 @@ function Detected({ items }: { items: Item[] }) {
                 {i.title}
                 {i.person ? <span className="font-normal text-clay"> → {i.person}</span> : null}
               </button>
-              <div className="mt-0.5 flex flex-wrap gap-1.5">
+              {i.context ? <p className="mt-0.5 text-[13px] leading-snug text-muted">{i.context}</p> : null}
+              <div className="mt-1 flex flex-wrap gap-1.5">
                 {i.dueDate ? <Pill>Vence {parseDay(i.dueDate).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })}</Pill> : null}
                 {i.prepDays ? <Pill>{plural(i.prepDays, 'día', 'días')} de preparación</Pill> : null}
               </div>
               <SourceLine item={i} />
             </div>
             <div className="flex shrink-0 gap-1">
-              <Button size="sm" variant="ghost" onClick={() => dismiss(i)} title="Descartar">
-                <Icon name="x" />
-              </Button>
+              <DismissButton item={i} />
               <Button size="sm" variant="primary" onClick={() => confirm(i)}>
                 <Icon name="check" /> Confirmar
               </Button>

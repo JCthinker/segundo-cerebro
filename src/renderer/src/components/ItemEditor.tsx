@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { addDays, toDay } from '@shared/dates'
 import type { Area, Item, ItemKind, ItemStatus } from '@shared/types'
 import { call, useAction, useData } from '../api'
 import { useNav } from '../nav'
@@ -17,7 +18,7 @@ export function ItemEditor({ item, defaults, onClose }: { item: Item | null; def
   const { resolve } = useNav()
   const { data: areas = [] } = useData<Area[]>('areas.list', [], ['areas'])
   const [f, setF] = useState<Partial<Item>>(
-    item ?? { kind: 'task', title: '', person: null, dueDate: null, prepDays: 0, areaId: null, status: 'active', ...defaults }
+    item ?? { kind: 'task', title: '', person: null, dueDate: addDays(toDay(new Date()), 1), prepDays: 0, areaId: null, status: 'active', ...defaults }
   )
   const set = <K extends keyof Item>(k: K, v: Item[K]) => setF((p) => ({ ...p, [k]: v }))
   const save = useAction(async () => {
@@ -44,6 +45,17 @@ export function ItemEditor({ item, defaults, onClose }: { item: Item | null; def
           <div className="col-span-2">
             <Field label="Qué">
               <input autoFocus className={inputCls} value={f.title ?? ''} onChange={(e) => set('title', e.target.value)} placeholder="Enviar el informe trimestral a Ana" />
+            </Field>
+          </div>
+          <div className="col-span-2">
+            <Field label="Contexto" hint="Qué ha pasado y qué hay que hacer">
+              <textarea
+                rows={2}
+                className={inputCls}
+                value={f.context ?? ''}
+                onChange={(e) => set('context', e.target.value || null)}
+                placeholder="Ana lo pidió en la reunión del lunes; hay que mandárselo por correo."
+              />
             </Field>
           </div>
           <Field label="Tipo">
@@ -86,6 +98,9 @@ export function ItemEditor({ item, defaults, onClose }: { item: Item | null; def
         {item ? (
           <div className="mt-3">
             <SourceLine item={item} />
+            {item.status === 'dismissed' && item.dismissReason ? (
+              <div className="mt-0.5 text-[12px] text-faint">Descartado: «{item.dismissReason}»</div>
+            ) : null}
           </div>
         ) : null}
         <ErrorNote>{save.error}</ErrorNote>
