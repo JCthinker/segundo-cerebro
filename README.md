@@ -61,6 +61,16 @@ Si usas la IA con Claude Code y tu cuenta de claude.ai, en **Entradas → De tu 
 
 Sin IA, la app sigue funcionando: notas, compromisos manuales, calendario y priorización.
 
+## Actualizaciones automáticas
+
+Cada Mac con la app instalada en Aplicaciones busca versiones nuevas cada 4 horas en GitHub Releases, las descarga, comprueba que son exactamente las publicadas y las instala al cerrar la app (o al pulsar «Reiniciar ahora» en el aviso). Los datos no se tocan. En **Ajustes → General → Actualizaciones** se ve la versión y se puede buscar a mano.
+
+Para publicar una versión nueva (compila desde lo guardado en git, sube la versión y la publica):
+
+```bash
+npm run release -- "Qué ha cambiado"
+```
+
 ## Desarrollo
 
 ```bash
