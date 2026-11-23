@@ -5,6 +5,7 @@ import { NavContext, type Page } from './nav'
 import { ApprovalHost } from './components/ApprovalHost'
 import { ItemEditor } from './components/ItemEditor'
 import { ResolvePanel } from './components/ResolvePanel'
+import { UpdateBanner } from './components/UpdateBanner'
 import { Icon } from './components/ui'
 import { Onboarding } from './Onboarding'
 import { Dashboard } from './pages/Dashboard'
@@ -106,6 +107,7 @@ export function App() {
         </aside>
 
         <main className="min-w-0 flex-1 overflow-y-auto">
+          <UpdateBanner />
           {ai && !ai.ok && page !== 'settings' ? (
             <div className="flex items-center gap-2 border-b border-line bg-warning-bg px-8 py-2 text-[12.5px] text-warning">
               <Icon name="sparkles" />

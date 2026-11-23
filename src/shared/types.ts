@@ -171,3 +171,14 @@ export const MODE_LABEL: Record<ToolMode, string> = {
   draft: 'Solo borrador',
   deny: 'Prohibido'
 }
+
+/** Estado de las actualizaciones automáticas de la app. */
+export interface UpdateStatus {
+  /** idle: al día · checking · downloading · ready: lista para instalar al reiniciar · error · dev: en desarrollo, sin actualizar */
+  state: 'idle' | 'checking' | 'downloading' | 'ready' | 'error' | 'dev'
+  current: string
+  /** Versión nueva encontrada (al descargar o lista). */
+  version?: string
+  detail?: string
+  checkedAt?: string
+}

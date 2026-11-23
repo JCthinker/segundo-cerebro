@@ -18,6 +18,7 @@ import { answerApproval } from './agent/permissions-gate'
 import { appendToSection, suggestRules } from './agent/suggest-rules'
 import { capture, importFile, importTranscript, syncIcs, syncMcpSource } from './sources'
 import { shortcutLabel } from './shortcut'
+import { checkForUpdate, installNow, updateStatus } from './updater'
 
 /** Llamadas que usan la IA: anotan el estado de la conexión. */
 async function withAi<T>(fn: () => Promise<T>): Promise<T> {
@@ -65,6 +66,9 @@ const api: Record<string, (...args: any[]) => unknown> = {
   'settings.get': () => ({ ...getSettings(), shortcut: shortcutLabel() }),
   'settings.update': (patch) => updateSettings(patch),
   'ai.status': () => cachedAiStatus(),
+  'update.status': () => updateStatus(),
+  'update.check': () => checkForUpdate(),
+  'update.install': () => installNow(),
   'ai.test': () => testAi(),
   'onboarding.finish': (opts: { demo: boolean }) => {
     if (db.isEmpty()) (opts.demo ? seedDemo : seedTemplateOnly)()

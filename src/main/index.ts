@@ -6,6 +6,7 @@ import { startScheduler } from './scheduler'
 import { enabledConnectorNames } from './agent/connectors'
 import { agentEnv } from './agent/client'
 import { registerCaptureShortcut } from './shortcut'
+import { startUpdater } from './updater'
 
 const here = import.meta.dirname
 
@@ -87,6 +88,7 @@ app.whenReady().then(() => {
   createMain()
   registerCaptureShortcut(toggleCapture)
   startScheduler()
+  startUpdater()
   // Busca ya las conexiones de claude.ai para que la primera pregunta no tenga que esperar.
   setTimeout(() => {
     try {

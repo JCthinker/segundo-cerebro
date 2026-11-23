@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { AiStatus, Area, Settings as S } from '@shared/types'
 import { call, useAction, useData } from '../api'
+import { useUpdateStatus } from '../components/UpdateBanner'
 import { Button, Card, ErrorNote, Field, Icon, inputBase, inputCls, PageHeader, SectionLabel } from '../components/ui'
 
 export function Settings({ ai, onAi }: { ai: AiStatus | null; onAi: (s: AiStatus) => void }) {
@@ -16,6 +17,8 @@ export function Settings({ ai, onAi }: { ai: AiStatus | null; onAi: (s: AiStatus
   })
   const test = useAction(async () => onAi(await call<AiStatus>('ai.test')))
   const demo = useAction(() => call('demo.load'))
+  const upd = useUpdateStatus()
+  const checkUpd = useAction(() => call('update.check'))
   const [newArea, setNewArea] = useState('')
 
   if (!s) return null
@@ -135,6 +138,24 @@ export function Settings({ ai, onAi }: { ai: AiStatus | null; onAi: (s: AiStatus
           >
             Añadir
           </Button>
+        </div>
+      </Card>
+
+      <SectionLabel>Actualizaciones</SectionLabel>
+      <Card className="space-y-3 p-4 text-[13px]">
+        <p>
+          Versión instalada: <strong>{upd?.current ?? '…'}</strong>. La app busca versiones nuevas cada pocas horas, las descarga sola y las instala al cerrarla o
+          al reiniciar.
+        </p>
+        <div className="flex items-center gap-3">
+          {upd?.state === 'ready' ? (
+            <Button onClick={() => void call('update.install')}>Reiniciar y actualizar</Button>
+          ) : (
+            <Button busy={checkUpd.busy || upd?.state === 'checking' || upd?.state === 'downloading'} disabled={upd?.state === 'dev'} onClick={() => checkUpd.run()}>
+              Buscar ahora
+            </Button>
+          )}
+          {upd?.detail ? <span className={upd.state === 'error' ? 'text-danger' : 'text-muted'}>{upd.detail}</span> : null}
         </div>
       </Card>
 
