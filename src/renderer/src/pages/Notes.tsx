@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { AiStatus, Area, Item, Note } from "@shared/types";
 import { KIND_LABEL } from "@shared/types";
+import { deleteNoteQuestion } from "@shared/notes";
 import { call, useAction, useData } from "../api";
 import { NoteEditor } from "../components/Editor";
 import { DuePill } from "../components/ItemRow";
@@ -398,13 +399,7 @@ function NoteView({
             variant="ghost"
             onClick={async () => {
               const inside = descendants(notes, id).length;
-              if (
-                inside &&
-                !window.confirm(
-                  `Esta nota tiene ${inside === 1 ? "1 nota" : `${inside} notas`} dentro. Se borrarán también. ¿Seguir?`,
-                )
-              )
-                return;
+              if (!window.confirm(deleteNoteQuestion(title, inside))) return;
               await call("notes.delete", id);
               go("notes", note.parentId ?? undefined);
             }}
