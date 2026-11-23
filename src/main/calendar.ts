@@ -82,3 +82,31 @@ function toAttendees(a: unknown): string[] {
     .map((s) => s.replace(/^mailto:/i, ''))
     .filter(Boolean)
 }
+
+/** Evento tal como lo devuelve Claude al leer una conexión de calendario. */
+export type ConnectorEvent = { id: string; title: string; start: string; end: string; allDay: boolean; location: string | null; attendees: string[]; description: string | null }
+
+/** Convierte los eventos leídos de una conexión de calendario al formato de la app. */
+export function toCalendarEvents(raw: ConnectorEvent[], sourceId: string): CalendarEvent[] {
+  const out: CalendarEvent[] = []
+  for (const e of raw) {
+    const allDay = !!e.allDay || /^\d{4}-\d{2}-\d{2}$/.test(e.start)
+    // Un día completo «AAAA-MM-DD» se toma en hora local, no en UTC.
+    const start = allDay && /^\d{4}-\d{2}-\d{2}$/.test(e.start) ? new Date(`${e.start}T00:00:00`) : new Date(e.start)
+    let end = allDay && /^\d{4}-\d{2}-\d{2}$/.test(e.end) ? new Date(`${e.end}T00:00:00`) : new Date(e.end)
+    if (isNaN(start.getTime())) continue
+    if (isNaN(end.getTime()) || end <= start) end = new Date(start.getTime() + (allDay ? 86_400_000 : 3_600_000))
+    out.push({
+      id: `${sourceId}:${e.id || e.title}:${start.toISOString()}`,
+      sourceId,
+      title: e.title || '(sin título)',
+      start: start.toISOString(),
+      end: end.toISOString(),
+      allDay,
+      location: e.location || null,
+      attendees: e.attendees ?? [],
+      description: e.description || null
+    })
+  }
+  return out.sort((a, b) => a.start.localeCompare(b.start))
+}

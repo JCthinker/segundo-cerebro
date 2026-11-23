@@ -16,7 +16,7 @@ import { cancelRun, startResolve } from './agent/resolve'
 import { ask, type ChatMessage } from './agent/ask'
 import { answerApproval } from './agent/permissions-gate'
 import { appendToSection, suggestRules } from './agent/suggest-rules'
-import { capture, importFile, importTranscript, syncIcs, syncMcpSource } from './sources'
+import { capture, connectorEventsSourceId, importFile, importTranscript, isCalendarConnector, syncConnectorCalendars, syncIcs, syncMcpSource } from './sources'
 import { shortcutLabel } from './shortcut'
 import { checkForUpdate, installNow, updateStatus } from './updater'
 
@@ -213,10 +213,18 @@ const api: Record<string, (...args: any[]) => unknown> = {
       throw new Error(friendlyError(e))
     }
   },
+  'connectors.syncCalendars': () => withAi(() => syncConnectorCalendars(true)),
   'connectors.toggle': (name: string, on: boolean) => {
     const cur = getSettings().claudeConnectorsOff.filter((n) => n !== name)
     updateSettings({ claudeConnectorsOff: on ? cur : [...cur, name] })
     dataChanged('mcp')
+    if (isCalendarConnector(name)) {
+      if (on) void syncConnectorCalendars(true).catch(() => undefined)
+      else {
+        db.replaceEvents(connectorEventsSourceId(name), [])
+        dataChanged('events')
+      }
+    }
     const label = connectorLabel(name).toLowerCase()
     const hasRule = parsePermissions(db.getWorkflow().markdown).some((r) => r.pattern.toLowerCase().replace(/\s+/g, '_').startsWith(label.replace(/\s+/g, '_')))
     return { hasRule }

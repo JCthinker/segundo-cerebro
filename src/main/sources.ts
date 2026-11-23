@@ -3,12 +3,13 @@ import { basename, extname } from 'node:path'
 import { toDay } from '@shared/dates'
 import type { Source } from '@shared/types'
 import * as db from './db'
-import { loadIcs, parseIcs } from './calendar'
+import { loadIcs, parseIcs, toCalendarEvents, type ConnectorEvent } from './calendar'
 import { dataChanged } from './events'
 import { userMcpServers } from './agent/app-mcp'
-import { connectorLabel, isConnectorName } from './agent/connectors'
+import { connectorLabel, enabledConnectorNames, isConnectorName, knownConnectorNames } from './agent/connectors'
+import { getSettings } from './settings'
 import { baseSystem } from './agent/context'
-import { friendlyError, markAiFailure, markAiOk, runAgent } from './agent/client'
+import { agentEnv, friendlyError, markAiFailure, markAiOk, runAgent } from './agent/client'
 import { extractToInbox, ITEMS_SCHEMA, saveProposals, type Extracted } from './agent/extract'
 import { isReadOnlyTool } from '@shared/permissions'
 
@@ -39,7 +40,96 @@ export async function syncAllCalendars(): Promise<void> {
   for (const s of db.listSources()) {
     if (s.kind === 'ics' && s.enabled && s.config.url) await syncIcs(s).catch(() => undefined)
   }
+  await syncConnectorCalendars().catch(() => undefined)
 }
+
+// ---------- calendario desde una conexión de claude.ai (Google Calendar, Outlook…) ----------
+export function isCalendarConnector(name: string): boolean {
+  return isConnectorName(name) && /calendar|calendario/i.test(connectorLabel(name))
+}
+
+export function connectorEventsSourceId(name: string): string {
+  return `connector:${name}`
+}
+
+const EVENTS_SCHEMA = {
+  type: 'object',
+  properties: {
+    events: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'Identificador del evento en el calendario' },
+          title: { type: 'string' },
+          start: { type: 'string', description: 'Inicio en ISO 8601 con zona horaria, p. ej. 2026-11-24T10:00:00+01:00. Para todo el día: AAAA-MM-DD' },
+          end: { type: 'string', description: 'Fin en el mismo formato' },
+          allDay: { type: 'boolean' },
+          location: { type: ['string', 'null'] },
+          attendees: { type: 'array', items: { type: 'string' } },
+          description: { type: ['string', 'null'], description: 'Resumen corto (máx. 300 caracteres)' }
+        },
+        required: ['id', 'title', 'start', 'end', 'allDay', 'location', 'attendees', 'description']
+      }
+    }
+  },
+  required: ['events']
+} as const
+
+
+const CAL_ROLE = `Eres el lector de calendario del «segundo cerebro». Usa SOLO herramientas de lectura del calendario para listar los eventos del usuario en el rango pedido (todos sus calendarios principales). No crees, cambies ni borres nada. Omite los eventos cancelados o rechazados. Devuelve las horas exactamente como las da el calendario, con su zona horaria.`
+
+const lastConnectorSync = new Map<string, number>()
+const CONNECTOR_CAL_EVERY = 25 * 60_000
+
+/** Trae las reuniones de las conexiones de calendario de claude.ai a la lista de eventos. */
+export async function syncConnectorCalendars(force = false): Promise<number> {
+  if (getSettings().aiMode === 'api-key') return 0
+  const env = agentEnv()
+  const enabled = new Set(await enabledConnectorNames(env))
+  const calendars = knownConnectorNames().filter(isCalendarConnector)
+  let total = 0
+  let lastError: unknown = null
+  for (const name of calendars) {
+    if (!enabled.has(name)) {
+      db.replaceEvents(connectorEventsSourceId(name), [])
+      continue
+    }
+    if (!force && Date.now() - (lastConnectorSync.get(name) ?? 0) < CONNECTOR_CAL_EVERY) continue
+    const from = new Date()
+    from.setDate(from.getDate() - 1)
+    from.setHours(0, 0, 0, 0)
+    const to = new Date(from)
+    to.setDate(to.getDate() + 15)
+    try {
+      const r = await runAgent({
+        system: baseSystem(CAL_ROLE),
+        prompt: `Lista mis eventos desde ${from.toISOString()} hasta ${to.toISOString()} (zona horaria del usuario: ${Intl.DateTimeFormat().resolvedOptions().timeZone}).`,
+        connectors: [name],
+        canUseTool: async (toolName, input) =>
+          isReadOnlyTool(toolName)
+            ? { behavior: 'allow', updatedInput: input }
+            : { behavior: 'deny', message: 'Esta sincronización es de solo lectura.' },
+        outputSchema: EVENTS_SCHEMA as unknown as Record<string, unknown>,
+        effort: 'low',
+        maxTurns: 10
+      })
+      markAiOk()
+      const raw = (r.structured as { events: ConnectorEvent[] } | null)?.events ?? []
+      const events = toCalendarEvents(raw, connectorEventsSourceId(name))
+      db.replaceEvents(connectorEventsSourceId(name), events)
+      lastConnectorSync.set(name, Date.now())
+      total += events.length
+    } catch (e) {
+      markAiFailure(e)
+      lastError = e
+    }
+  }
+  dataChanged('events')
+  if (lastError) throw new Error(friendlyError(lastError))
+  return total
+}
+
 
 // ---------- fuentes MCP (Slack, Jira, correo…) → bandeja ----------
 const MCP_PULL_ROLE = `Eres el lector de fuentes del «segundo cerebro». Usas SOLO herramientas de lectura de la herramienta indicada para encontrar lo que pide el usuario y detectar promesas, entregas, tareas y decisiones que le afecten.

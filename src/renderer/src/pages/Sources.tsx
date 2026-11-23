@@ -222,6 +222,12 @@ function ClaudeConnectors({ onPull }: { onPull: (s: Partial<Source>) => void }) 
     const rule = CONNECTOR_HINTS[c.label]?.rule
     setSuggestRule(!c.enabled && !r.hasRule && rule ? rule : null)
   })
+  const [calMsg, setCalMsg] = useState<string | null>(null)
+  const syncCal = useAction(async () => {
+    setCalMsg(null)
+    const n = await call<number>('connectors.syncCalendars')
+    setCalMsg(n ? `Listo: ${n} ${n === 1 ? 'evento' : 'eventos'} en tu calendario de las próximas dos semanas.` : 'Conectado, pero no hay eventos en las próximas dos semanas.')
+  })
   const addRule = useAction(async (rule: string) => {
     await call('workflow.appendRule', 'Permisos', rule)
     setSuggestRule(null)
@@ -262,6 +268,11 @@ function ClaudeConnectors({ onPull }: { onPull: (s: Partial<Source>) => void }) 
                     {ok ? `${c.tools} herramientas` : c.status === 'needs-auth' ? 'Hay que volver a iniciar sesión en claude.ai → Ajustes → Conectores' : 'No responde ahora mismo'}
                   </div>
                 </div>
+                {c.enabled && ok && /calendar|calendario/i.test(c.label) ? (
+                  <Button size="sm" variant="ghost" busy={syncCal.busy} onClick={() => syncCal.run()}>
+                    <Icon name="refresh" /> Traer reuniones
+                  </Button>
+                ) : null}
                 {c.enabled && ok ? (
                   <Button
                     size="sm"
@@ -291,7 +302,8 @@ function ClaudeConnectors({ onPull }: { onPull: (s: Partial<Source>) => void }) 
             </Button>
           </div>
         ) : null}
-        <ErrorNote>{toggle.error || refresh.error || addRule.error}</ErrorNote>
+        {calMsg ? <p className="pb-3 text-[12.5px] text-success">{calMsg}</p> : null}
+        <ErrorNote>{toggle.error || refresh.error || addRule.error || syncCal.error}</ErrorNote>
       </Card>
     </>
   )
