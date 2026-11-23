@@ -56,6 +56,9 @@ export function openDb(file: string): void {
   db.pragma('journal_mode = WAL')
   db.pragma('foreign_keys = ON')
   db.exec(SCHEMA)
+  // Notas dentro de notas: columna añadida después; se crea si falta.
+  const noteCols = db.prepare('PRAGMA table_info(notes)').all() as { name: string }[]
+  if (!noteCols.some((c) => c.name === 'parent_id')) db.exec('ALTER TABLE notes ADD COLUMN parent_id TEXT')
 }
 
 const now = () => new Date().toISOString()
@@ -71,8 +74,9 @@ export function setSetting(key: string, value: string | null): void {
 }
 
 // ---------- notes ----------
-type NoteRow = { id: string; title: string; content_json: string; plain: string; created_at: string; updated_at: string }
+type NoteRow = { id: string; parent_id: string | null; title: string; content_json: string; plain: string; created_at: string; updated_at: string }
 const toNote = (r: NoteRow): Note => ({
+  parentId: r.parent_id ?? null,
   id: r.id, title: r.title, contentJson: r.content_json, plain: r.plain, createdAt: r.created_at, updatedAt: r.updated_at
 })
 
@@ -83,10 +87,11 @@ export function getNote(id: string): Note | null {
   const r = db.prepare('SELECT * FROM notes WHERE id = ?').get(id) as NoteRow | undefined
   return r ? toNote(r) : null
 }
-export function createNote(title = ''): Note {
+export function createNote(title = '', parentId: string | null = null): Note {
   const id = randomUUID()
   const t = now()
-  db.prepare('INSERT INTO notes(id, title, content_json, plain, created_at, updated_at) VALUES(?, ?, ?, ?, ?, ?)').run(id, title, '', '', t, t)
+  const parent = parentId && getNote(parentId) ? parentId : null
+  db.prepare('INSERT INTO notes(id, parent_id, title, content_json, plain, created_at, updated_at) VALUES(?, ?, ?, ?, ?, ?, ?)').run(id, parent, title, '', '', t, t)
   db.prepare('INSERT INTO notes_fts(note_id, title, plain) VALUES(?, ?, ?)').run(id, title, '')
   return getNote(id)!
 }
@@ -96,9 +101,33 @@ export function saveNote(id: string, title: string, contentJson: string, plain: 
   db.prepare('INSERT INTO notes_fts(note_id, title, plain) VALUES(?, ?, ?)').run(id, title, plain)
   return getNote(id)!
 }
+/** Ids de todas las notas que cuelgan de esta (hijas, nietas…), sin incluirla. */
+export function noteDescendants(id: string): string[] {
+  const rows = db
+    .prepare(
+      `WITH RECURSIVE sub(id) AS (SELECT id FROM notes WHERE parent_id = ? UNION SELECT n.id FROM notes n JOIN sub ON n.parent_id = sub.id)
+       SELECT id FROM sub`
+    )
+    .all(id) as { id: string }[]
+  return rows.map((r) => r.id)
+}
+/** Borra la nota y todas las que tiene dentro. */
 export function deleteNote(id: string): void {
-  db.prepare('DELETE FROM notes WHERE id = ?').run(id)
-  db.prepare('DELETE FROM notes_fts WHERE note_id = ?').run(id)
+  const ids = [id, ...noteDescendants(id)]
+  const del = db.transaction(() => {
+    for (const n of ids) {
+      db.prepare('DELETE FROM notes WHERE id = ?').run(n)
+      db.prepare('DELETE FROM notes_fts WHERE note_id = ?').run(n)
+    }
+  })
+  del()
+}
+/** Mete la nota dentro de otra (o la saca al nivel principal con null). No deja meter una nota dentro de sí misma ni de sus hijas. */
+export function moveNote(id: string, parentId: string | null): boolean {
+  if (parentId === id) return false
+  if (parentId && (!getNote(parentId) || noteDescendants(id).includes(parentId))) return false
+  db.prepare('UPDATE notes SET parent_id = ? WHERE id = ?').run(parentId, id)
+  return true
 }
 export function markNoteExtracted(id: string): void {
   db.prepare('UPDATE notes SET extracted_at = ? WHERE id = ?').run(now(), id)

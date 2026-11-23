@@ -4,7 +4,7 @@ import { query, type CanUseTool, type EffortLevel, type McpServerConfig, type Qu
 import type { AiStatus } from '@shared/types'
 import { serverKey } from '@shared/permissions'
 import { getApiKey, getSettings } from '../settings'
-import { connectorToolAllowed, isConnectorTool, knownConnectorNames, listClaudeConnectors } from './connectors'
+import { connectorToolAllowed, enabledConnectorNames, isConnectorTool, knownConnectorNames } from './connectors'
 
 export interface AgentEvent {
   type: 'text' | 'tool'
@@ -21,8 +21,8 @@ export interface RunAgentOptions {
   builtinTools?: string[]
   canUseTool?: CanUseTool
   /**
-   * Conexiones de claude.ai que puede usar esta ejecución: 'enabled' = las que el usuario activó,
-   * o una lista concreta (siempre dentro de las activadas). Por defecto ninguna.
+   * Conexiones de claude.ai que puede usar esta ejecución: 'enabled' = todas menos las que el usuario apagó,
+   * o una lista concreta (siempre dentro de esas). Por defecto ninguna.
    */
   connectors?: 'enabled' | string[]
   outputSchema?: Record<string, unknown>
@@ -74,16 +74,11 @@ const internalOnly: CanUseTool = async (name, input) =>
 export async function runAgent(o: RunAgentOptions): Promise<RunAgentResult> {
   const s = getSettings()
   const env = agentEnv()
-  const allowed =
-    s.aiMode === 'claude-code'
-      ? o.connectors === 'enabled'
-        ? s.claudeConnectors
-        : (o.connectors ?? []).filter((n) => s.claudeConnectors.includes(n))
-      : []
+  // Para saber qué conexiones hay (y quitar las apagadas) se buscan una vez y se guardan en caché.
+  const usable = s.aiMode === 'claude-code' && o.connectors?.length ? await enabledConnectorNames(env) : []
+  const allowed = o.connectors === 'enabled' ? usable : (o.connectors ?? []).filter((n) => usable.includes(n))
   // Sin conexiones permitidas, Claude Code no las carga. Con alguna, las demás se quitan.
   if (!allowed.length) env.ENABLE_CLAUDEAI_MCP_SERVERS = 'false'
-  // Para quitar las demás conexiones hay que saber cómo se llaman (se guarda en caché 10 min).
-  if (allowed.length && !knownConnectorNames().length) await listClaudeConnectors(env).catch(() => undefined)
   const disallowedTools = knownConnectorNames()
     .filter((n) => !allowed.includes(n))
     .map((n) => `mcp__${serverKey(n)}`)

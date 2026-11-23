@@ -27,6 +27,8 @@ export interface Area {
 
 export interface Note {
   id: string
+  /** Nota dentro de la que está (null = en el nivel principal). */
+  parentId: string | null
   title: string
   contentJson: string
   plain: string
@@ -126,8 +128,8 @@ export interface Settings {
   model: string
   briefHour: number // 0-23, -1 = desactivado
   useClaudeCodeConnections: boolean
-  /** Conexiones de la cuenta de claude.ai (p. ej. «claude.ai Gmail») que la app puede usar. */
-  claudeConnectors: string[]
+  /** Conexiones de la cuenta de claude.ai (p. ej. «claude.ai Gmail») que el usuario ha apagado. Las demás se usan. */
+  claudeConnectorsOff: string[]
   onboarded: boolean
 }
 

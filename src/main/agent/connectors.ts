@@ -7,7 +7,7 @@ import { claudeExecutable } from './client'
 /**
  * Conexiones de la cuenta de claude.ai (Gmail, Google Drive, Notion…).
  * Claude Code las carga solo en cada ejecución cuando hay sesión con claude.ai.
- * La app solo deja usar las que el usuario activa en Entradas; el resto se apagan.
+ * Por defecto la app puede usarlas todas; el usuario puede apagar las que no quiera en Entradas.
  */
 
 let cache: { at: number; list: Omit<ClaudeConnector, 'enabled'>[] } | null = null
@@ -23,7 +23,7 @@ export function connectorLabel(name: string): string {
 
 /** Arranca Claude Code sin enviar nada al modelo y pregunta qué conexiones tiene. */
 export async function listClaudeConnectors(env: Record<string, string | undefined>, refresh = false): Promise<ClaudeConnector[]> {
-  const enabled = new Set(getSettings().claudeConnectors)
+  const off = new Set(getSettings().claudeConnectorsOff)
   if (getSettings().aiMode === 'api-key') return []
   if (!cache || refresh || Date.now() - cache.at > TTL) {
     let release: () => void = () => undefined
@@ -51,7 +51,15 @@ export async function listClaudeConnectors(env: Record<string, string | undefine
       q.close()
     }
   }
-  return cache.list.map((c) => ({ ...c, enabled: enabled.has(c.name) }))
+  return cache.list.map((c) => ({ ...c, enabled: !off.has(c.name) }))
+}
+
+/** Conexiones que la app puede usar: todas las de la cuenta menos las apagadas. Las busca si aún no se conocen. */
+export async function enabledConnectorNames(env: Record<string, string | undefined>): Promise<string[]> {
+  if (getSettings().aiMode === 'api-key') return []
+  if (!cache) await listClaudeConnectors(env).catch(() => undefined)
+  const off = new Set(getSettings().claudeConnectorsOff)
+  return knownConnectorNames().filter((n) => !off.has(n))
 }
 
 export function knownConnectorNames(): string[] {

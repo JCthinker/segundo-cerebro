@@ -23,7 +23,7 @@ export async function ask(history: ChatMessage[], onTool?: (name: string) => voi
   const log = (e: RunLogEntry) => emit('ask-log', e)
   try {
     const r = await runAgent({
-      system: baseSystem(ASK_ROLE) + `\n\n${connectedToolsSummary()}`,
+      system: baseSystem(ASK_ROLE) + `\n\n${await connectedToolsSummary()}`,
       prompt: `Conversación hasta ahora:\n\n${transcript}\n\nResponde al último mensaje del usuario.`,
       mcpServers: { cerebro: cerebroServer({ allowWrites: true, onChange: () => dataChanged('items') }), ...userMcpServers() },
       canUseTool: makeGate(runId, { draftsOnly: false, log }),

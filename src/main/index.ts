@@ -3,6 +3,8 @@ import { join } from 'node:path'
 import { openDb } from './db'
 import { registerIpc } from './ipc'
 import { startScheduler } from './scheduler'
+import { enabledConnectorNames } from './agent/connectors'
+import { agentEnv } from './agent/client'
 import { registerCaptureShortcut } from './shortcut'
 
 const here = import.meta.dirname
@@ -85,6 +87,14 @@ app.whenReady().then(() => {
   createMain()
   registerCaptureShortcut(toggleCapture)
   startScheduler()
+  // Busca ya las conexiones de claude.ai para que la primera pregunta no tenga que esperar.
+  setTimeout(() => {
+    try {
+      void enabledConnectorNames(agentEnv()).catch(() => undefined)
+    } catch {
+      // Sin API key o sin sesión: se buscarán cuando haga falta.
+    }
+  }, 3000)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().filter((w) => w !== captureWin).length === 0) createMain()

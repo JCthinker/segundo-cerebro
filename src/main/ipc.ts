@@ -107,8 +107,8 @@ const api: Record<string, (...args: any[]) => unknown> = {
   // notas
   'notes.list': () => db.listNotes(),
   'notes.get': (id: string) => db.getNote(id),
-  'notes.create': () => {
-    const n = db.createNote('')
+  'notes.create': (parentId?: string | null) => {
+    const n = db.createNote('', parentId ?? null)
     dataChanged('notes')
     return n
   },
@@ -117,6 +117,11 @@ const api: Record<string, (...args: any[]) => unknown> = {
     db.deleteNote(id)
     dataChanged('notes')
     return true
+  },
+  'notes.move': (id: string, parentId: string | null) => {
+    const ok = db.moveNote(id, parentId)
+    dataChanged('notes')
+    return ok
   },
   'notes.extract': (id: string, force?: boolean) => extractNote(id, !!force),
   'notes.search': (q: string) => db.searchNotes(q, 20),
@@ -201,8 +206,8 @@ const api: Record<string, (...args: any[]) => unknown> = {
     }
   },
   'connectors.toggle': (name: string, on: boolean) => {
-    const cur = getSettings().claudeConnectors.filter((n) => n !== name)
-    updateSettings({ claudeConnectors: on ? [...cur, name] : cur })
+    const cur = getSettings().claudeConnectorsOff.filter((n) => n !== name)
+    updateSettings({ claudeConnectorsOff: on ? cur : [...cur, name] })
     dataChanged('mcp')
     const label = connectorLabel(name).toLowerCase()
     const hasRule = parsePermissions(db.getWorkflow().markdown).some((r) => r.pattern.toLowerCase().replace(/\s+/g, '_').startsWith(label.replace(/\s+/g, '_')))

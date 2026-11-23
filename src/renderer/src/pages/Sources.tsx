@@ -241,7 +241,7 @@ function ClaudeConnectors({ onPull }: { onPull: (s: Partial<Source>) => void }) 
       </SectionLabel>
       <Card className="px-4">
         <p className="pt-3 text-[12.5px] text-muted">
-          Las conexiones que tienes en claude.ai (Ajustes → Conectores). Solo las que actives aquí puede usarlas la app, y siempre con los permisos de Mi flujo.
+          Las conexiones que tienes en claude.ai (Ajustes → Conectores). La app puede usarlas todas, siempre con los permisos de Mi flujo. Desmarca las que no quieras.
         </p>
         {!list && !error ? (
           <div className="flex items-center gap-2 py-3 text-[13px] text-muted">
