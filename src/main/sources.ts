@@ -10,7 +10,7 @@ import { connectorLabel, enabledConnectorNames, isConnectorName, knownConnectorN
 import { getSettings } from './settings'
 import { baseSystem } from './agent/context'
 import { agentEnv, friendlyError, markAiFailure, markAiOk, runAgent } from './agent/client'
-import { extractToInbox, ITEMS_SCHEMA, saveProposals, type Extracted } from './agent/extract'
+import { extractToInbox, ITEMS_SCHEMA, knownForPrompt, saveProposals, type Extracted } from './agent/extract'
 import { isReadOnlyTool } from '@shared/permissions'
 
 // ---------- calendario ICS ----------
@@ -132,19 +132,29 @@ export async function syncConnectorCalendars(force = false): Promise<number> {
 
 
 // ---------- fuentes MCP (Slack, Jira, correo…) → bandeja ----------
-const MCP_PULL_ROLE = `Eres el lector de fuentes del «segundo cerebro». Usas SOLO herramientas de lectura de la herramienta indicada para encontrar lo que pide el usuario y detectar promesas, entregas, tareas y decisiones que le afecten.
+const MAX_NEW = 5
+
+/** Qué merece una tarea: lo mismo para las lecturas programadas y el repaso de la mañana. */
+const WHAT_TO_NOTE = `Qué apuntar:
+- Solo lo que pida una acción del propio usuario según las reglas de «Mi flujo». Si «Mi flujo» dice en qué casos avisar o crear una tarea, limítate a esos casos. Lo informativo, lo que tienen que hacer otros y lo que no encaja en su flujo no se apunta.
+- Un asunto = un elemento. Si del mismo tema se habla en varios canales, hilos, correos o herramientas, júntalo todo en uno solo (en "snippet", el fragmento más claro; en "ref", el enlace principal).
+- Si un asunto ya está en la lista de lo apuntado o descartado, no lo incluyas, aunque venga de otro canal o con otras palabras.
+- Como mucho ${MAX_NEW} elementos, los más importantes. Devolver la lista vacía es lo normal si no hay nada que cumpla esto.`
+
+const MCP_PULL_ROLE = `Eres el lector de fuentes del «segundo cerebro». Usas SOLO herramientas de lectura de la herramienta indicada para encontrar lo que pide el usuario.
 - No escribas ni envíes nada.
 - En "ref" pon el enlace o identificador del mensaje, correo o ticket.
-- No dupliques lo ya conocido.`
+
+${WHAT_TO_NOTE}`
 
 export async function syncMcpSource(source: Source): Promise<number> {
   const server = String(source.config.server ?? '')
   const instructions = String(source.config.instructions ?? 'Lo que me afecte de los últimos 2 días')
-  const known = db.listItems({ status: ['proposed', 'active'] }).slice(0, 60).map((i) => `- ${i.title}`).join('\n')
+  const known = knownForPrompt()
   try {
     const r = await runAgent({
       system: baseSystem(MCP_PULL_ROLE),
-      prompt: `Herramienta: ${isConnectorName(server) ? connectorLabel(server) : server}\nQué buscar: ${instructions}\n\nYa conocido:\n${known || '(nada)'}`,
+      prompt: `Herramienta: ${isConnectorName(server) ? connectorLabel(server) : server}\nQué buscar: ${instructions}\n\n${known}`,
       ...(isConnectorName(server) ? { connectors: [server] } : { mcpServers: userMcpServers([server]) }),
       // Solo lectura: cualquier escritura se rechaza sin preguntar.
       canUseTool: async (toolName, input) =>
@@ -156,7 +166,7 @@ export async function syncMcpSource(source: Source): Promise<number> {
       maxTurns: 15
     })
     markAiOk()
-    const n = saveProposals((r.structured as { items: Extracted[] } | null)?.items ?? [], 'mcp', isConnectorName(server) ? connectorLabel(server) : server)
+    const n = saveProposals((r.structured as { items: Extracted[] } | null)?.items ?? [], 'mcp', isConnectorName(server) ? connectorLabel(server) : server, MAX_NEW)
     db.markSourceSynced(source.id, null)
     dataChanged('items')
     return n
@@ -169,7 +179,7 @@ export async function syncMcpSource(source: Source): Promise<number> {
 }
 
 /**
- * Lee a la vez todas las herramientas de «Lecturas programadas» que estén activas
+ * Lee una tras otra todas las herramientas de «Lecturas programadas» que estén activas
  * (Jira, Gmail…). Se usa antes de preparar el día, para que el orden tenga en cuenta
  * lo que hay en ellas. Si una falla, el error queda en su fila y las demás siguen.
  */
@@ -181,8 +191,10 @@ export async function syncAllPulls(): Promise<number> {
     if (!server) return false
     return isConnectorName(server) ? connectorsOn.has(server) : true
   })
-  const results = await Promise.allSettled(pulls.map((s) => syncMcpSource(s)))
-  return results.reduce((n, r) => n + (r.status === 'fulfilled' ? r.value : 0), 0)
+  // Una detrás de otra: así cada lectura ve lo que ya apuntó la anterior y no se repite.
+  let total = 0
+  for (const s of pulls) total += await syncMcpSource(s).catch(() => 0)
+  return total
 }
 
 // ---------- archivos ----------
@@ -235,11 +247,11 @@ export async function capture(text: string): Promise<number> {
 
 // ---------- repaso de todas las conexiones antes del brief ----------
 const SWEEP_ROLE = `Eres el lector de fuentes del «segundo cerebro». Antes del resumen de la mañana repasas las herramientas conectadas del usuario (correo, chat, documentos, tickets…) usando SOLO herramientas de lectura.
-Busca lo de las últimas 24 horas que le afecte: promesas que hizo, cosas que le piden, entregas con fecha y decisiones tomadas.
-- Mira cada herramienta disponible, pero sé breve: lo reciente e importante, no todo.
+Mira lo de las últimas 24 horas en cada herramienta disponible, pero sé breve: lo reciente e importante, no todo.
 - No escribas ni envíes nada.
 - En "ref" pon el enlace o identificador del mensaje, correo o ticket.
-- No dupliques lo ya conocido. Si dudas, no lo incluyas.`
+
+${WHAT_TO_NOTE}`
 
 /**
  * Repasa las conexiones activas que no tienen ya una lectura propia en Entradas (ni son calendarios)
@@ -250,10 +262,10 @@ export async function sweepConnectors(): Promise<number> {
   const withPull = new Set(db.listSources().filter((s) => s.kind === 'mcp' && s.enabled).map((s) => String(s.config.server ?? '')))
   const names = (await enabledConnectorNames(agentEnv())).filter((n) => !isCalendarConnector(n) && !withPull.has(n))
   if (!names.length) return 0
-  const known = db.listItems({ status: ['proposed', 'active'] }).slice(0, 60).map((i) => `- ${i.title}`).join('\n')
+  const known = knownForPrompt()
   const r = await runAgent({
     system: baseSystem(SWEEP_ROLE),
-    prompt: `Herramientas: ${names.map(connectorLabel).join(', ')}\n\nYa conocido:\n${known || '(nada)'}`,
+    prompt: `Herramientas: ${names.map(connectorLabel).join(', ')}\n\n${known}`,
     connectors: names,
     canUseTool: async (toolName, input) =>
       isReadOnlyTool(toolName)
@@ -263,7 +275,7 @@ export async function sweepConnectors(): Promise<number> {
     effort: 'medium',
     maxTurns: 25
   })
-  const n = saveProposals((r.structured as { items: Extracted[] } | null)?.items ?? [], 'mcp', 'Repaso de la mañana')
+  const n = saveProposals((r.structured as { items: Extracted[] } | null)?.items ?? [], 'mcp', 'Repaso de la mañana', MAX_NEW)
   if (n) dataChanged('items')
   return n
 }

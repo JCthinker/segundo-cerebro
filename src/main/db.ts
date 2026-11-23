@@ -236,12 +236,6 @@ export function deleteItem(id: string): void {
   db.prepare('DELETE FROM items WHERE id = ?').run(id)
 }
 /** Evita duplicar propuestas cuando se vuelve a analizar la misma nota. */
-export function proposalExists(sourceRef: string | null, title: string): boolean {
-  const r = db
-    .prepare("SELECT 1 FROM items WHERE IFNULL(source_ref, '') = IFNULL(?, '') AND lower(title) = lower(?) LIMIT 1")
-    .get(sourceRef, title.trim())
-  return !!r
-}
 export function countProposed(): number {
   return (db.prepare("SELECT COUNT(*) AS n FROM items WHERE status = 'proposed'").get() as { n: number }).n
 }

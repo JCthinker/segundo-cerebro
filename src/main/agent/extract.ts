@@ -1,4 +1,5 @@
-import type { ItemKind, SourceType } from '@shared/types'
+import { onlyNew } from '@shared/dedupe'
+import type { Item, ItemKind, SourceType } from '@shared/types'
 import * as db from '../db'
 import { baseSystem } from './context'
 import { runAgent } from './client'
@@ -47,7 +48,8 @@ const EXTRACT_ROLE = `Eres el extractor del «segundo cerebro» del usuario. Lee
 - decision: una decisión tomada que conviene recordar.
 Reglas:
 - Solo lo que esté en el texto. Si dudas, no lo incluyas.
-- No dupliques lo que ya existe en la lista de elementos conocidos.
+- No dupliques lo que ya existe en la lista de elementos conocidos ni lo que el usuario descartó.
+- Un asunto = un elemento: si el mismo tema aparece varias veces en el texto, júntalo en uno.
 - Si el usuario es quien recibe la promesa de otra persona, no es una promesa suya: como mucho, una tarea de seguimiento si lo pide el texto.
 - Usa las reglas de «Mi flujo» para estimar plazos implícitos y márgenes de preparación (por ejemplo, «lo que pide Marta tiene 48 horas»).`
 
@@ -59,15 +61,11 @@ export async function extractToInbox(p: {
   label: string
 }): Promise<number> {
   if (p.text.trim().length < 8) return 0
-  const known = db
-    .listItems({ status: ['proposed', 'active'] })
-    .slice(0, 80)
-    .map((i) => `- ${i.title}${i.person ? ` (${i.person})` : ''}${i.dueDate ? ` · ${i.dueDate}` : ''}`)
-    .join('\n')
+  const known = knownForPrompt()
 
   const r = await runAgent({
     system: baseSystem(EXTRACT_ROLE),
-    prompt: `Elementos ya conocidos:\n${known || '(ninguno)'}\n\nTexto a analizar (${p.label}):\n<texto>\n${p.text.slice(0, 60_000)}\n</texto>`,
+    prompt: `${known}\n\nTexto a analizar (${p.label}):\n<texto>\n${p.text.slice(0, 60_000)}\n</texto>`,
     outputSchema: ITEMS_SCHEMA,
     effort: 'low',
     maxTurns: 3
@@ -75,12 +73,30 @@ export async function extractToInbox(p: {
   return saveProposals((r.structured as { items: Extracted[] } | null)?.items ?? [], p.sourceType, p.sourceRef)
 }
 
-export function saveProposals(items: Extracted[], sourceType: SourceType, sourceRef: string | null): number {
-  let created = 0
-  for (const x of items) {
-    if (!x.title?.trim()) continue
-    const ref = x.ref || sourceRef
-    if (db.proposalExists(ref, x.title)) continue
+/** Lo que ya existe o se descartó hace poco: con esto se evita volver a proponerlo. */
+export function existingForDedupe(): Item[] {
+  const since = new Date(Date.now() - 30 * 86_400_000).toISOString()
+  const recentClosed = db.listItems({ status: ['done', 'dismissed', 'renegotiated'] }).filter((i) => i.updatedAt >= since)
+  return [...db.listItems({ status: ['proposed', 'active'] }), ...recentClosed]
+}
+
+/** Lista para el prompt: lo pendiente y lo descartado, para que Claude no lo repita. */
+export function knownForPrompt(): string {
+  const line = (i: Item) => `- ${i.title}${i.person ? ` (${i.person})` : ''}${i.dueDate ? ` · ${i.dueDate}` : ''}`
+  const all = existingForDedupe()
+  const open = all.filter((i) => i.status === 'proposed' || i.status === 'active').slice(0, 80).map(line)
+  const closed = all.filter((i) => i.status !== 'proposed' && i.status !== 'active').slice(0, 40).map(line)
+  return `Ya apuntado (no lo repitas, aunque aparezca en otro canal):\n${open.join('\n') || '(nada)'}\n\nYa hecho o descartado por el usuario (no lo vuelvas a proponer):\n${closed.join('\n') || '(nada)'}`
+}
+
+/**
+ * Guarda lo detectado como propuestas en la bandeja, sin repetir asuntos que ya existan
+ * (aunque estén redactados distinto o vengan de otro canal). Con `max`, como mucho esas.
+ */
+export function saveProposals(items: Extracted[], sourceType: SourceType, sourceRef: string | null, max?: number): number {
+  const candidates = items.map((x) => ({ ...x, sourceRef: x.ref || sourceRef, sourceSnippet: x.snippet || null }))
+  const fresh = onlyNew(candidates, existingForDedupe(), max)
+  for (const x of fresh) {
     const due = x.dueDate && /^\d{4}-\d{2}-\d{2}$/.test(x.dueDate) ? x.dueDate : null
     db.createItem({
       kind: x.kind,
@@ -91,10 +107,9 @@ export function saveProposals(items: Extracted[], sourceType: SourceType, source
       areaId: db.findAreaByName(x.area)?.id ?? null,
       status: 'proposed',
       sourceType,
-      sourceRef: ref,
-      sourceSnippet: x.snippet || null
+      sourceRef: x.sourceRef,
+      sourceSnippet: x.sourceSnippet
     })
-    created++
   }
-  return created
+  return fresh.length
 }
