@@ -241,10 +241,14 @@ Busca lo de las últimas 24 horas que le afecte: promesas que hizo, cosas que le
 - En "ref" pon el enlace o identificador del mensaje, correo o ticket.
 - No dupliques lo ya conocido. Si dudas, no lo incluyas.`
 
-/** Repasa todas las conexiones activas (menos los calendarios) y deja lo nuevo en la bandeja. Devuelve cuántas cosas creó. */
+/**
+ * Repasa las conexiones activas que no tienen ya una lectura propia en Entradas (ni son calendarios)
+ * y deja lo nuevo en la bandeja. Devuelve cuántas cosas creó.
+ */
 export async function sweepConnectors(): Promise<number> {
   if (getSettings().aiMode === 'api-key') return 0
-  const names = (await enabledConnectorNames(agentEnv())).filter((n) => !isCalendarConnector(n))
+  const withPull = new Set(db.listSources().filter((s) => s.kind === 'mcp' && s.enabled).map((s) => String(s.config.server ?? '')))
+  const names = (await enabledConnectorNames(agentEnv())).filter((n) => !isCalendarConnector(n) && !withPull.has(n))
   if (!names.length) return 0
   const known = db.listItems({ status: ['proposed', 'active'] }).slice(0, 60).map((i) => `- ${i.title}`).join('\n')
   const r = await runAgent({
