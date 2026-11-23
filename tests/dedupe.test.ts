@@ -53,4 +53,12 @@ describe('ticketKeys y toolFromRef', () => {
     expect(toolFromRef('https://miempresa.atlassian.net/browse/FP-1')).toBe('Jira')
     expect(toolFromRef('Repaso de la mañana')).toBeNull()
   })
+
+  it('deduce la herramienta de un identificador que no es enlace', () => {
+    expect(toolFromRef('#producto')).toBe('Slack')
+    expect(toolFromRef('Hilo de Slack con Marta')).toBe('Slack')
+    expect(toolFromRef('FP-123')).toBe('Jira')
+    expect(toolFromRef('Correo de ana@empresa.com')).toBe('Gmail')
+    expect(toolFromRef('Notas en Google Drive')).toBe('Google Drive')
+  })
 })

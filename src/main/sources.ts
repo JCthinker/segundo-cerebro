@@ -275,7 +275,8 @@ export async function sweepConnectors(): Promise<number> {
     effort: 'medium',
     maxTurns: 25
   })
-  const n = await saveProposals((r.structured as { items: Extracted[] } | null)?.items ?? [], 'mcp', null)
+  // Si Claude no dice de qué herramienta sale y solo se repasó una, es esa.
+  const n = await saveProposals((r.structured as { items: Extracted[] } | null)?.items ?? [], 'mcp', null, names.length === 1 ? connectorLabel(names[0]) : null)
   if (n) dataChanged('items')
   return n
 }

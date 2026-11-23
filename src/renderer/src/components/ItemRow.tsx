@@ -27,7 +27,12 @@ export function SourceLine({ item }: { item: Item }) {
     note: 'Nota', capture: 'Captura', calendar: 'Calendario', file: 'Archivo', transcript: 'Acta', mcp: 'Herramienta', manual: 'Manual'
   }
   // Lo que sale de una herramienta muestra su nombre (Slack, Gmail, Jira…).
-  const name = item.sourceType === 'mcp' ? item.sourceTool || toolFromRef(item.sourceRef) || label.mcp : label[item.sourceType]
+  // Si no se sabe la herramienta y el origen no es un enlace, se muestra el origen tal cual.
+  const unknownRef = item.sourceRef && !/^https?:\/\//.test(item.sourceRef) ? item.sourceRef : null
+  const name =
+    item.sourceType === 'mcp'
+      ? item.sourceTool || toolFromRef(item.sourceRef) || unknownRef || 'Herramienta conectada'
+      : label[item.sourceType]
   const isUrl = item.sourceRef && /^https?:\/\//.test(item.sourceRef)
   return (
     <div className="mt-0.5 truncate text-[12px] text-faint">

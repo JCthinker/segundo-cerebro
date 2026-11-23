@@ -73,10 +73,26 @@ export function onlyNew<T extends TaskLike>(candidates: T[], existing: TaskLike[
   return out
 }
 
-/** Nombre de la herramienta a partir de un enlace, para tareas antiguas que no lo guardaron. */
+/** Pistas en un identificador que no es un enlace: «#producto», «FP-12», «correo de Ana»… */
+const TEXT_HINTS: [RegExp, string][] = [
+  [/\bslack\b|^#[\w-]+|\bcanal\b|\bhilo\b|\bDM\b/i, 'Slack'],
+  [/\bgmail\b|\bcorreo\b|\bemail\b|\be-mail\b|[\w.+-]+@[\w-]+\.[\w.]+/i, 'Gmail'],
+  [/\bjira\b|\b[A-Z][A-Z0-9]{1,9}-\d+\b/, 'Jira'],
+  [/\bcalendar\b|\bcalendario\b|\bevento\b/i, 'Google Calendar'],
+  [/\bdrive\b|\bgoogle docs?\b|\bdocumento\b/i, 'Google Drive'],
+  [/\bnotion\b/i, 'Notion'],
+  [/\boutlook\b|\bteams\b/i, 'Outlook'],
+  [/\bgithub\b/i, 'GitHub'],
+  [/\blinear\b/i, 'Linear']
+]
+
+/**
+ * Nombre de la herramienta de donde sale una tarea, deducido de su enlace o identificador
+ * (para cuando no se guardó). null si no hay pistas.
+ */
 export function toolFromRef(ref: string | null | undefined): string | null {
   if (!ref) return null
-  if (!/^https?:\/\//.test(ref)) return null
+  if (!/^https?:\/\//.test(ref)) return TEXT_HINTS.find(([re]) => re.test(ref))?.[1] ?? null
   const host = (() => {
     try {
       return new URL(ref).hostname

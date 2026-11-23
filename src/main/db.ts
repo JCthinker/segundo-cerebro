@@ -15,6 +15,7 @@ import type {
   SourceType
 } from '@shared/types'
 import { addDays, defaultDueDate, toDay } from '@shared/dates'
+import { toolFromRef } from '@shared/dedupe'
 import { decrypt, encrypt } from './secrets'
 
 let db: Database.Database
@@ -65,6 +66,12 @@ export function openDb(file: string): void {
   if (!itemCols.some((c) => c.name === 'source_tool')) db.exec('ALTER TABLE items ADD COLUMN source_tool TEXT')
   if (!itemCols.some((c) => c.name === 'context')) db.exec('ALTER TABLE items ADD COLUMN context TEXT')
   if (!itemCols.some((c) => c.name === 'dismiss_reason')) db.exec('ALTER TABLE items ADD COLUMN dismiss_reason TEXT')
+  // Tareas de herramientas que no guardaron de cuál salen: se deduce del enlace.
+  const noTool = db.prepare("SELECT id, source_ref FROM items WHERE source_type = 'mcp' AND source_tool IS NULL").all() as { id: string; source_ref: string | null }[]
+  for (const r of noTool) {
+    const tool = toolFromRef(r.source_ref)
+    if (tool) db.prepare('UPDATE items SET source_tool = ? WHERE id = ?').run(tool, r.id)
+  }
   // Una sola vez: lo pendiente que no tenía fecha pasa a tenerla mañana.
   if (!getSetting('migr.undatedTomorrow')) {
     db.prepare(
