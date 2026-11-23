@@ -75,6 +75,7 @@ export async function extractToInbox(p: {
     system: baseSystem(EXTRACT_ROLE),
     prompt: `${known}\n\nTexto a analizar (${p.label}):\n<texto>\n${p.text.slice(0, 60_000)}\n</texto>`,
     outputSchema: ITEMS_SCHEMA,
+    tier: 'quick',
     effort: 'low',
     maxTurns: 3
   })
@@ -133,6 +134,7 @@ async function dropRewordings<T extends { title: string; person?: string | null 
         'Comparas listas de tareas. Una propuesta es repetida solo si pide hacer LO MISMO que otra tarea, aunque esté dicha con otras palabras. Dos tareas distintas sobre el mismo asunto o el mismo ticket NO son repetidas (por ejemplo, «Estimar FP-12» y «Describir FP-12»). Dentro de las propuestas nuevas, si dos son la misma, marca solo la segunda.',
       prompt: `Tareas ya apuntadas o descartadas:\n${prev || '(ninguna)'}\n\nPropuestas nuevas:\n${next}`,
       outputSchema: SAME_TASK_SCHEMA,
+      tier: 'quick',
       effort: 'low',
       maxTurns: 2
     })

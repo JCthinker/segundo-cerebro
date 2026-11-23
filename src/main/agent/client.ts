@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { query, type CanUseTool, type EffortLevel, type McpServerConfig, type Query, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
 import type { AiStatus } from '@shared/types'
 import { serverKey } from '@shared/permissions'
+import { modelFor, type ModelTier } from '@shared/models'
 import { getApiKey, getSettings } from '../settings'
 import { connectorToolAllowed, enabledConnectorNames, isConnectorTool, knownConnectorNames } from './connectors'
 
@@ -26,6 +27,8 @@ export interface RunAgentOptions {
    */
   connectors?: 'enabled' | string[]
   outputSchema?: Record<string, unknown>
+  /** «quick» (barato) para leer y decidir; «strong» (potente, por defecto) para proponer y ejecutar soluciones. */
+  tier?: ModelTier
   effort?: EffortLevel
   maxTurns?: number
   onEvent?: (e: AgentEvent) => void
@@ -103,7 +106,7 @@ export async function runAgent(o: RunAgentOptions): Promise<RunAgentResult> {
   const q = query({
     prompt: allowed.length ? streamed() : o.prompt,
     options: {
-      model: s.model,
+      model: modelFor(o.tier ?? 'strong', s),
       systemPrompt: o.system,
       tools: o.builtinTools ?? [],
       mcpServers: o.mcpServers ?? {},
@@ -208,6 +211,7 @@ export async function testAi(): Promise<AiStatus> {
     const r = await runAgent({
       prompt: 'Responde solo con la palabra: listo',
       system: 'Eres una comprobación de conexión. Responde con una sola palabra.',
+      tier: 'quick',
       effort: 'low',
       maxTurns: 1
     })

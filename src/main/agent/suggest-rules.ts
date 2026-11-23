@@ -53,6 +53,7 @@ export async function suggestRules(): Promise<RuleSuggestion[]> {
     ),
     prompt: `Notas recientes:\n${notes || '(ninguna)'}\n\nCompromisos:\n${items || '(ninguno)'}\n\nPropuestas descartadas y su motivo:\n${dismissed || '(ninguna)'}`,
     outputSchema: SCHEMA,
+    tier: 'quick',
     effort: 'medium',
     maxTurns: 3
   })

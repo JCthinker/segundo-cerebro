@@ -28,6 +28,7 @@ export async function ask(history: ChatMessage[], onTool?: (name: string) => voi
       mcpServers: { cerebro: cerebroServer({ allowWrites: true, onChange: () => dataChanged('items') }), ...userMcpServers() },
       canUseTool: makeGate(runId, { draftsOnly: false, log }),
         connectors: 'enabled',
+      tier: 'strong',
       effort: 'high',
       maxTurns: 20,
       onEvent: (e) => {

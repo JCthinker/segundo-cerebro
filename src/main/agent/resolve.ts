@@ -46,6 +46,7 @@ export function startResolve(itemId: string | null, goal: string, mode: 'normal'
         mcpServers: { cerebro: cerebroServer({ allowWrites: true, onChange: () => dataChanged('items') }), ...userMcpServers() },
         canUseTool: makeGate(run.id, { draftsOnly: mode === 'drafts', log }),
         connectors: 'enabled',
+        tier: 'strong',
         effort: 'high',
         maxTurns: 30,
         abortController: ac,

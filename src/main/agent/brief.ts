@@ -117,6 +117,7 @@ export async function generateBrief(useAI: boolean): Promise<Brief> {
     prompt: `Datos de hoy:\n${JSON.stringify(data, null, 2)}`,
     mcpServers: { cerebro: cerebroServer({ allowWrites: false }) },
     outputSchema: BRIEF_SCHEMA,
+    tier: 'quick',
     effort: 'medium',
     maxTurns: 10
   })

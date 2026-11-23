@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import type { AiStatus, Area, Settings as S } from '@shared/types'
+import { MODEL_OPTIONS } from '@shared/models'
 import { call, useAction, useData } from '../api'
 import { useUpdateStatus } from '../components/UpdateBanner'
 import { Button, Card, ErrorNote, Field, Icon, inputBase, inputCls, PageHeader, SectionLabel } from '../components/ui'
@@ -8,8 +9,6 @@ export function Settings({ ai, onAi }: { ai: AiStatus | null; onAi: (s: AiStatus
   const { data: s, reload } = useData<S & { shortcut: string | null }>('settings.get', [], ['settings'])
   const { data: areas = [] } = useData<Area[]>('areas.list', [], ['areas'])
   const [apiKey, setApiKey] = useState('')
-  const [model, setModel] = useState('')
-  useEffect(() => setModel(s?.model ?? ''), [s?.model])
 
   const update = useAction(async (patch: Partial<S> & { apiKey?: string | null }) => {
     await call('settings.update', patch)
@@ -65,8 +64,11 @@ export function Settings({ ai, onAi }: { ai: AiStatus | null; onAi: (s: AiStatus
             ) : null}
           </div>
         ) : null}
-        <Field label="Modelo" hint="Por defecto claude-opus-5-5.">
-          <input className={inputCls} value={model} onChange={(e) => setModel(e.target.value)} onBlur={() => model !== s.model && update.run({ model })} />
+        <Field label="Modelo para leer y elegir qué hacer" hint="Detecta tareas en tus canales y prepara el plan del día. Basta uno barato.">
+          <ModelSelect value={s.quickModel} onChange={(quickModel) => update.run({ quickModel })} />
+        </Field>
+        <Field label="Modelo para proponer y hacer soluciones" hint="Resuelve tareas y responde en el chat. Mejor uno potente.">
+          <ModelSelect value={s.model} onChange={(model) => update.run({ model })} />
         </Field>
         <div className="flex items-center gap-3">
           <Button busy={test.busy} onClick={() => test.run()}>
@@ -172,5 +174,19 @@ export function Settings({ ai, onAi }: { ai: AiStatus | null; onAi: (s: AiStatus
       <ErrorNote>{update.error || test.error || demo.error}</ErrorNote>
       <div className="h-10" />
     </div>
+  )
+}
+
+function ModelSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const known = MODEL_OPTIONS.some((m) => m.id === value)
+  return (
+    <select className={inputCls} value={value} onChange={(e) => onChange(e.target.value)}>
+      {MODEL_OPTIONS.map((m) => (
+        <option key={m.id} value={m.id}>
+          {m.label}
+        </option>
+      ))}
+      {known ? null : <option value={value}>{value}</option>}
+    </select>
   )
 }

@@ -130,7 +130,10 @@ export interface ActionRun {
 export interface Settings {
   aiMode: 'claude-code' | 'api-key'
   hasApiKey: boolean
+  /** Modelo potente: proponer y ejecutar soluciones (resolver tareas, chat). */
   model: string
+  /** Modelo barato: leer canales, detectar tareas y preparar el plan del día. */
+  quickModel: string
   briefHour: number // 0-23, -1 = desactivado
   useClaudeCodeConnections: boolean
   /** Conexiones de la cuenta de claude.ai (p. ej. «claude.ai Gmail») que el usuario ha apagado. Las demás se usan. */

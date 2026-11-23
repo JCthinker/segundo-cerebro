@@ -1,14 +1,15 @@
 import type { Settings } from '@shared/types'
 import * as db from './db'
 import { decrypt, encrypt } from './secrets'
+import { DEFAULT_QUICK_MODEL, DEFAULT_STRONG_MODEL } from '@shared/models'
 
-export const DEFAULT_MODEL = 'claude-opus-5-5'
 
 export function getSettings(): Settings {
   return {
     aiMode: (db.getSetting('aiMode') as Settings['aiMode']) ?? 'claude-code',
     hasApiKey: !!db.getSetting('apiKey'),
-    model: db.getSetting('model') ?? DEFAULT_MODEL,
+    model: db.getSetting('model') ?? DEFAULT_STRONG_MODEL,
+    quickModel: db.getSetting('quickModel') ?? DEFAULT_QUICK_MODEL,
     briefHour: Number(db.getSetting('briefHour') ?? 8),
     useClaudeCodeConnections: db.getSetting('useClaudeCodeConnections') === '1',
     claudeConnectorsOff: parseList(db.getSetting('claudeConnectorsOff')),
@@ -18,7 +19,8 @@ export function getSettings(): Settings {
 
 export function updateSettings(patch: Partial<Settings> & { apiKey?: string | null }): Settings {
   if (patch.aiMode) db.setSetting('aiMode', patch.aiMode)
-  if (patch.model !== undefined) db.setSetting('model', patch.model.trim() || DEFAULT_MODEL)
+  if (patch.model !== undefined) db.setSetting('model', patch.model.trim() || DEFAULT_STRONG_MODEL)
+  if (patch.quickModel !== undefined) db.setSetting('quickModel', patch.quickModel.trim() || DEFAULT_QUICK_MODEL)
   if (patch.briefHour !== undefined) db.setSetting('briefHour', String(patch.briefHour))
   if (patch.useClaudeCodeConnections !== undefined) db.setSetting('useClaudeCodeConnections', patch.useClaudeCodeConnections ? '1' : '0')
   if (patch.claudeConnectorsOff !== undefined) db.setSetting('claudeConnectorsOff', JSON.stringify([...new Set(patch.claudeConnectorsOff)]))
