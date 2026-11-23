@@ -25,7 +25,6 @@ async function maybeMorningBrief(): Promise<void> {
   if (existing?.byAI) return
   briefRunning = true
   try {
-    await syncAllCalendars()
     await generateBrief(true)
     markAiOk()
     dataChanged('brief')

@@ -168,6 +168,23 @@ export async function syncMcpSource(source: Source): Promise<number> {
   }
 }
 
+/**
+ * Lee a la vez todas las herramientas de «Lecturas programadas» que estén activas
+ * (Jira, Gmail…). Se usa antes de preparar el día, para que el orden tenga en cuenta
+ * lo que hay en ellas. Si una falla, el error queda en su fila y las demás siguen.
+ */
+export async function syncAllPulls(): Promise<number> {
+  const connectorsOn = new Set(await enabledConnectorNames(agentEnv()).catch(() => [] as string[]))
+  const pulls = db.listSources().filter((s) => {
+    if (s.kind !== 'mcp' || !s.enabled) return false
+    const server = String(s.config.server ?? '')
+    if (!server) return false
+    return isConnectorName(server) ? connectorsOn.has(server) : true
+  })
+  const results = await Promise.allSettled(pulls.map((s) => syncMcpSource(s)))
+  return results.reduce((n, r) => n + (r.status === 'fulfilled' ? r.value : 0), 0)
+}
+
 // ---------- archivos ----------
 const TEXT_EXT = new Set(['.txt', '.md', '.markdown', '.csv', '.json', '.html', '.htm', '.eml', '.ics', '.vtt', '.srt'])
 
@@ -213,5 +230,36 @@ export async function importTranscript(text: string, title: string): Promise<num
 export async function capture(text: string): Promise<number> {
   const n = await extractToInbox({ text, sourceType: 'capture', sourceRef: null, label: 'captura rápida' })
   dataChanged('items')
+  return n
+}
+
+// ---------- repaso de todas las conexiones antes del brief ----------
+const SWEEP_ROLE = `Eres el lector de fuentes del «segundo cerebro». Antes del resumen de la mañana repasas las herramientas conectadas del usuario (correo, chat, documentos, tickets…) usando SOLO herramientas de lectura.
+Busca lo de las últimas 24 horas que le afecte: promesas que hizo, cosas que le piden, entregas con fecha y decisiones tomadas.
+- Mira cada herramienta disponible, pero sé breve: lo reciente e importante, no todo.
+- No escribas ni envíes nada.
+- En "ref" pon el enlace o identificador del mensaje, correo o ticket.
+- No dupliques lo ya conocido. Si dudas, no lo incluyas.`
+
+/** Repasa todas las conexiones activas (menos los calendarios) y deja lo nuevo en la bandeja. Devuelve cuántas cosas creó. */
+export async function sweepConnectors(): Promise<number> {
+  if (getSettings().aiMode === 'api-key') return 0
+  const names = (await enabledConnectorNames(agentEnv())).filter((n) => !isCalendarConnector(n))
+  if (!names.length) return 0
+  const known = db.listItems({ status: ['proposed', 'active'] }).slice(0, 60).map((i) => `- ${i.title}`).join('\n')
+  const r = await runAgent({
+    system: baseSystem(SWEEP_ROLE),
+    prompt: `Herramientas: ${names.map(connectorLabel).join(', ')}\n\nYa conocido:\n${known || '(nada)'}`,
+    connectors: names,
+    canUseTool: async (toolName, input) =>
+      isReadOnlyTool(toolName)
+        ? { behavior: 'allow', updatedInput: input }
+        : { behavior: 'deny', message: 'Este repaso es de solo lectura.' },
+    outputSchema: ITEMS_SCHEMA,
+    effort: 'medium',
+    maxTurns: 25
+  })
+  const n = saveProposals((r.structured as { items: Extracted[] } | null)?.items ?? [], 'mcp', 'Repaso de la mañana')
+  if (n) dataChanged('items')
   return n
 }

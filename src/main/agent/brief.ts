@@ -2,9 +2,11 @@ import { addDays, toDay } from '@shared/dates'
 import { letGoCandidates, rankItems } from '@shared/priority'
 import type { Brief, CalendarEvent, ScoredItem } from '@shared/types'
 import * as db from '../db'
+import { syncAllCalendars, syncAllPulls } from '../sources'
 import { cerebroServer } from './app-mcp'
 import { baseSystem } from './context'
 import { runAgent } from './client'
+import { sweepConnectors } from '../sources'
 
 export function dayRange(day: string): { from: string; to: string } {
   const start = new Date(`${day}T00:00:00`)
@@ -73,9 +75,16 @@ Tu trabajo:
 2. Para cada reunión de hoy y de mañana, una checklist corta (2-4 puntos) de qué preparar antes. Usa search_notes y list_items para encontrar contexto relacionado con el título o los asistentes. Si no hay nada que preparar, deja la lista vacía.
 3. Proponer qué puede soltar (aplazar o delegar). Nunca promesas a otras personas.
 4. Indicar qué reglas de «Mi flujo» han influido.
+En «nuevoPorConfirmar» está lo recién detectado en notas y herramientas (Jira, correo…) que el usuario aún no ha confirmado. No lo pongas en las 3 cosas de hoy, pero si algo es importante o urgente, menciónalo en el resumen para que lo revise.
+5. Si «nuevoDeConexiones» es mayor que 0, menciónalo en el resumen (p. ej. «Tienes 3 cosas nuevas de tus conexiones en la bandeja»).
 Usa solo ids que aparezcan en los datos.`
 
 export async function generateBrief(useAI: boolean): Promise<Brief> {
+  if (useAI) {
+    // Antes de ordenar el día: calendario al día y lo nuevo de tus herramientas (Jira, correo…).
+    await syncAllCalendars().catch(() => undefined)
+    await syncAllPulls().catch(() => undefined)
+  }
   const day = toDay(new Date())
   const areas = db.listAreas()
   const ranked = rankItems(db.listItems({ status: ['active'] }), day, areas)
@@ -96,7 +105,12 @@ export async function generateBrief(useAI: boolean): Promise<Brief> {
       margenDias: s.item.prepDays, puntuacion: s.score, motivos: s.reasons, enRiesgo: s.atRisk
     })),
     agendaHoy: events.map((e) => ({ id: e.id, titulo: e.title, inicio: e.start, fin: e.end, asistentes: e.attendees, notas: e.description })),
-    agendaManana: tomorrowEvents.map((e) => ({ id: e.id, titulo: e.title, inicio: e.start, fin: e.end, asistentes: e.attendees, notas: e.description }))
+    nuevoDeConexiones: fromConnectors,
+    agendaManana: tomorrowEvents.map((e) => ({ id: e.id, titulo: e.title, inicio: e.start, fin: e.end, asistentes: e.attendees, notas: e.description })),
+    // Lo detectado en notas y herramientas que el usuario aún no ha confirmado.
+    nuevoPorConfirmar: db.listItems({ status: ['proposed'] }).slice(0, 15).map((i) => ({
+      tipo: i.kind, titulo: i.title, persona: i.person, vence: i.dueDate, origen: i.sourceType
+    }))
   }
 
   const r = await runAgent({
