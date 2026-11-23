@@ -135,7 +135,7 @@ if mv "$TARGET" "$TARGET.old" && mv "$NEW" "$TARGET"; then
 else
   [ -d "$TARGET" ] || mv "$TARGET.old" "$TARGET"
 fi
-${relaunch ? 'open "$TARGET"' : ''}
+${relaunch ? 'if [ -n "$CEREBRO_DATA_DIR" ]; then open -n --env CEREBRO_DATA_DIR="$CEREBRO_DATA_DIR" "$TARGET"; else open "$TARGET"; fi' : ''}
 `
   const child = spawn('/bin/sh', ['-c', script, 'install', target, readyApp], { detached: true, stdio: 'ignore' })
   child.unref()
