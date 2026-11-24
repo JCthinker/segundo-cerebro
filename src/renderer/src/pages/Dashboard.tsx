@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { AiStatus, Brief, CalendarEvent, Item, ScoredItem, TodayView } from '@shared/types'
 import { formatDayLong, parseDay } from '@shared/dates'
-import { planDays, type DayPlan, type PlanEntry } from '@shared/plan'
+import { planDays, todayIds, type DayPlan, type PlanEntry } from '@shared/plan'
 import { call, useAction, useData } from '../api'
 import { DismissButton } from '../components/Dismiss'
 import { ItemRow, SourceLine } from '../components/ItemRow'
@@ -27,8 +27,10 @@ export function Dashboard({ ai, shortcut }: { ai: AiStatus | null; shortcut: str
   const checklists = new Map((brief?.prepare ?? []).map((p) => [p.eventId, p.checklist]))
 
   // «Empieza por»: lo que eligió Claude en el brief o, sin brief, lo más urgente de hoy.
+  // Si le has cambiado la fecha a algo que eligió Claude, ya no toca hoy y va a su nuevo día.
   const urgent = [...plan.overdue, ...today.entries].sort((a, b) => b.s.score - a.s.score)
-  const briefTop = (brief?.top ?? []).filter((t) => byId.has(t.itemId))
+  const forToday = todayIds(plan)
+  const briefTop = (brief?.top ?? []).filter((t) => byId.has(t.itemId) && forToday.has(t.itemId))
   const top: { s: ScoredItem; why: string }[] = briefTop.length
     ? briefTop.slice(0, 3).map((t) => ({ s: byId.get(t.itemId)!, why: t.why }))
     : urgent.slice(0, 3).map((e) => ({ s: e.s, why: e.s.reasons.join(' · ') }))

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { planDays } from '@shared/plan'
+import { planDays, todayIds } from '@shared/plan'
 import { rankItems } from '@shared/priority'
 import type { CalendarEvent, Item } from '@shared/types'
 
@@ -67,5 +67,15 @@ describe('fecha por defecto', () => {
   it('respeta la fecha que ya tiene y no pone fecha a las decisiones', () => {
     expect(defaultDueDate('task', '2026-12-05', '2026-11-23')).toBe('2026-12-05')
     expect(defaultDueDate('decision', null, '2026-11-23')).toBeNull()
+  })
+})
+
+describe('todayIds', () => {
+  it('solo incluye lo que toca hoy: si mueves la fecha, deja de estar', () => {
+    const before = planDays(rankItems([item({ id: 'x', dueDate: TODAY }), item({ id: 'sin' })], TODAY, []), [], TODAY)
+    expect(todayIds(before)).toEqual(new Set(['x', 'sin']))
+    const after = planDays(rankItems([item({ id: 'x', dueDate: '2026-11-26' }), item({ id: 'sin' })], TODAY, []), [], TODAY)
+    expect(todayIds(after)).toEqual(new Set(['sin']))
+    expect(after.days.find((d) => d.day === '2026-11-26')!.entries.map((e) => e.s.item.id)).toEqual(['x'])
   })
 })

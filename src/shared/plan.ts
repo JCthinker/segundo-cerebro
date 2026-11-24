@@ -73,3 +73,12 @@ export function planDays(ranked: ScoredItem[], events: CalendarEvent[], today: s
   later.sort((a, b) => a.s.item.dueDate!.localeCompare(b.s.item.dueDate!))
   return { overdue, days, later, undated }
 }
+
+/**
+ * Ids de lo que toca hoy según las fechas: lo atrasado, lo que hay que empezar hoy y lo que no tiene fecha.
+ * Lo que eligió Claude en el brief solo se muestra arriba si sigue estando aquí; si le cambias la fecha,
+ * pasa al día que le corresponde.
+ */
+export function todayIds(plan: Plan): Set<string> {
+  return new Set([...plan.overdue.map((e) => e.s.item.id), ...plan.days[0].entries.map((e) => e.s.item.id), ...plan.undated.map((s) => s.item.id)])
+}
