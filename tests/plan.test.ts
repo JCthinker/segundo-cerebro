@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { planDays, todayIds } from '@shared/plan'
-import { rankItems } from '@shared/priority'
-import type { CalendarEvent, Item } from '@shared/types'
+import { keepChecks, planDays, todayIds, toggleCheck } from '@shared/plan'
+import { rankItems, scoreItem } from '@shared/priority'
+import type { Brief, CalendarEvent, Item } from '@shared/types'
 
 const TODAY = '2026-11-22'
 
@@ -77,5 +77,35 @@ describe('todayIds', () => {
     const after = planDays(rankItems([item({ id: 'x', dueDate: '2026-11-26' }), item({ id: 'sin' })], TODAY, []), [], TODAY)
     expect(todayIds(after)).toEqual(new Set(['sin']))
     expect(after.days.find((d) => d.day === '2026-11-26')!.entries.map((e) => e.s.item.id)).toEqual(['x'])
+  })
+})
+
+describe('lo hecho hoy', () => {
+  it('se queda en su día, al final; si estaba atrasado, en hoy', () => {
+    const hecho = scoreItem(item({ id: 'hecho', dueDate: '2026-11-24', status: 'done' }), TODAY, [])
+    const viejo = scoreItem(item({ id: 'viejo', dueDate: '2026-11-20', status: 'done' }), TODAY, [])
+    const ranked = rankItems([item({ id: 'pendiente', dueDate: '2026-11-24' })], TODAY, [])
+    const plan = planDays([hecho, viejo, ...ranked], [], TODAY)
+    expect(plan.days[2].entries.map((e) => e.s.item.id)).toEqual(['pendiente', 'hecho'])
+    expect(plan.days[0].entries.map((e) => e.s.item.id)).toEqual(['viejo'])
+    expect(plan.overdue).toEqual([])
+  })
+})
+
+describe('checklists de reuniones', () => {
+  const brief: Brief = {
+    date: TODAY, generatedAt: TODAY, byAI: true, summary: '', top: [], letGo: [], rulesApplied: [],
+    prepare: [{ eventId: 'r', title: 'R', start: TODAY, checklist: ['a', 'b'] }]
+  }
+  it('marca y desmarca', () => {
+    const on = toggleCheck(brief, 'r', 'a', true)
+    expect(on.prepare[0].done).toEqual(['a'])
+    expect(toggleCheck(on, 'r', 'a', false).prepare[0].done).toEqual([])
+  })
+  it('al repasar el día conserva lo marcado que sigue en la lista', () => {
+    const prev = toggleCheck(toggleCheck(brief, 'r', 'a', true), 'r', 'b', true)
+    const next: Brief = { ...brief, prepare: [{ ...brief.prepare[0], checklist: ['a', 'c'] }] }
+    expect(keepChecks(prev, next).prepare[0].done).toEqual(['a'])
+    expect(keepChecks({ ...prev, date: '2026-11-21' }, next).prepare[0].done).toBeUndefined()
   })
 })

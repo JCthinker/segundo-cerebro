@@ -1,4 +1,5 @@
 import { addDays, toDay } from '@shared/dates'
+import { keepChecks } from '@shared/plan'
 import { letGoCandidates, rankItems } from '@shared/priority'
 import type { Brief, CalendarEvent, ScoredItem } from '@shared/types'
 import * as db from '../db'
@@ -95,8 +96,9 @@ export async function generateBrief(useAI: boolean): Promise<Brief> {
   const upcoming = [...events, ...tomorrowEvents]
   const base = fallbackBrief(day, ranked, events, upcoming)
   if (!useAI) {
-    db.saveBrief(base)
-    return base
+    const kept = keepChecks(db.getBrief(day), base)
+    db.saveBrief(kept)
+    return kept
   }
 
   const data = {
@@ -138,6 +140,7 @@ export async function generateBrief(useAI: boolean): Promise<Brief> {
     letGo: out.letGo.filter((l) => ids.has(l.itemId) && db.getItem(l.itemId)?.kind !== 'promise'),
     rulesApplied: out.rulesApplied
   }
-  db.saveBrief(brief)
-  return brief
+  const kept = keepChecks(db.getBrief(day), brief)
+  db.saveBrief(kept)
+  return kept
 }

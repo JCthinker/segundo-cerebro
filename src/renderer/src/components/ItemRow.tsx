@@ -71,7 +71,19 @@ export function ItemRow({
   const item = scored?.item ?? plain!
   const area = areas.find((a) => a.id === item.areaId)
   const reasons = why ?? scored?.reasons.join(' · ')
+  const isDone = item.status === 'done'
   const done = () => call('items.update', item.id, { status: 'done' })
+
+  if (isDone) {
+    return (
+      <div className="flex items-start gap-3 border-b border-line py-2.5 last:border-0">
+        <CheckButton done onClick={() => call('items.update', item.id, { status: 'active' })} />
+        <button className="min-w-0 flex-1 text-left text-muted line-through hover:underline" onClick={() => editItem(item)}>
+          {item.title}
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div className="group flex items-start gap-3 border-b border-line py-2.5 last:border-0">
@@ -110,5 +122,22 @@ export function ItemRow({
         </div>
       </div>
     </div>
+  )
+}
+
+/** Círculo para marcar como hecho; si ya está hecho, se ve marcado y al pulsarlo se desmarca. */
+export function CheckButton({ done, onClick, small }: { done: boolean; onClick: () => void; small?: boolean }) {
+  const size = small ? 'mt-[3px] h-3.5 w-3.5' : 'mt-0.5 h-4 w-4'
+  return (
+    <button
+      onClick={onClick}
+      aria-label={done ? 'Desmarcar' : 'Marcar como hecho'}
+      title={done ? 'Desmarcar' : 'Marcar como hecho'}
+      className={`flex ${size} shrink-0 items-center justify-center rounded-full border ${
+        done ? 'border-success bg-success text-white' : 'border-line-strong text-transparent hover:border-success hover:text-success'
+      }`}
+    >
+      <Icon name="check" className={small ? 'h-2.5 w-2.5' : 'h-3 w-3'} />
+    </button>
   )
 }

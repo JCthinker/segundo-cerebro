@@ -1,7 +1,8 @@
 import { dialog, ipcMain, shell, BrowserWindow } from 'electron'
 import { writeFile } from 'node:fs/promises'
 import { addDays, toDay } from '@shared/dates'
-import { rankItems } from '@shared/priority'
+import { rankItems, scoreItem } from '@shared/priority'
+import { toggleCheck } from '@shared/plan'
 import type { ResolvePlan, TodayView } from '@shared/types'
 import * as db from './db'
 import { dataChanged } from './events'
@@ -54,6 +55,10 @@ function todayView(): TodayView {
   return {
     date,
     ranked: rankItems(db.listItems({ status: ['active'] }), date, areas),
+    doneToday: db
+      .listItems({ status: ['done'] })
+      .filter((i) => i.doneAt && toDay(new Date(i.doneAt)) === date)
+      .map((i) => scoreItem(i, date, areas)),
     events: db.listEvents(from, to),
     brief: db.getBrief(date),
     areas,
@@ -86,6 +91,12 @@ const api: Record<string, (...args: any[]) => unknown> = {
 
   // hoy
   'today.get': () => todayView(),
+  'brief.check': (eventId: string, text: string, on: boolean) => {
+    const b = db.getBrief(toDay(new Date()))
+    if (b) db.saveBrief(toggleCheck(b, eventId, text, on))
+    dataChanged('brief')
+    return true
+  },
   'brief.generate': async (useAI: boolean) => {
     const b = useAI ? await withAi(() => generateBrief(true)) : await generateBrief(false)
     dataChanged('brief')

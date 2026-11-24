@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import type { AiStatus, Brief, CalendarEvent, Item, ScoredItem, TodayView } from '@shared/types'
 import { formatDayLong, parseDay } from '@shared/dates'
-import { planDays, todayIds, type DayPlan, type PlanEntry } from '@shared/plan'
+import { isDone, planDays, todayIds, type DayPlan, type PlanEntry } from '@shared/plan'
 import { call, useAction, useData } from '../api'
 import { DismissButton } from '../components/Dismiss'
-import { ItemRow, SourceLine } from '../components/ItemRow'
+import { CheckButton, ItemRow, SourceLine } from '../components/ItemRow'
 import { Markdown } from '../components/Markdown'
 import { Button, Card, ErrorNote, Icon, inputCls, Pill, SectionLabel, Spinner, textareaCls } from '../components/ui'
 import { useNav } from '../nav'
@@ -21,14 +21,14 @@ export function Dashboard({ ai, shortcut }: { ai: AiStatus | null; shortcut: str
   if (error) return <ErrorNote>{error}</ErrorNote>
   if (!data) return null
   const { ranked, brief, areas, date } = data
-  const plan = planDays(ranked, data.events, date)
+  const plan = planDays([...ranked, ...data.doneToday], data.events, date)
   const [today, ...next] = plan.days
   const byId = new Map(ranked.map((s) => [s.item.id, s]))
-  const checklists = new Map((brief?.prepare ?? []).map((p) => [p.eventId, p.checklist]))
+  const checklists: Checklists = new Map((brief?.prepare ?? []).map((p) => [p.eventId, { items: p.checklist, done: new Set(p.done ?? []) }]))
 
   // «Empieza por»: lo que eligió Claude en el brief o, sin brief, lo más urgente de hoy.
   // Si le has cambiado la fecha a algo que eligió Claude, ya no toca hoy y va a su nuevo día.
-  const urgent = [...plan.overdue, ...today.entries].sort((a, b) => b.s.score - a.s.score)
+  const urgent = [...plan.overdue, ...today.entries.filter((e) => !isDone(e.s))].sort((a, b) => b.s.score - a.s.score)
   const forToday = todayIds(plan)
   const briefTop = (brief?.top ?? []).filter((t) => byId.has(t.itemId) && forToday.has(t.itemId))
   const top: { s: ScoredItem; why: string }[] = briefTop.length
@@ -45,7 +45,7 @@ export function Dashboard({ ai, shortcut }: { ai: AiStatus | null; shortcut: str
 
   const subtitle = [
     plural(meetingsToday.length, 'reunión', 'reuniones'),
-    plural(top.length + todayRest.length, 'cosa para hoy', 'cosas para hoy'),
+    plural(top.length + todayRest.filter((e) => !isDone(e.s)).length, 'cosa para hoy', 'cosas para hoy'),
     plan.overdue.length ? plural(plan.overdue.length, 'atrasada', 'atrasadas') : null
   ]
     .filter(Boolean)
@@ -108,7 +108,7 @@ export function Dashboard({ ai, shortcut }: { ai: AiStatus | null; shortcut: str
         </Card>
         <Card className="divide-y divide-line px-4 lg:col-span-2">
           {today.events.length ? (
-            today.events.map((e) => <Meeting key={e.id} e={e} checklist={checklists.get(e.id) ?? []} />)
+            today.events.map((e) => <Meeting key={e.id} e={e} checklist={checklists.get(e.id)} />)
           ) : (
             <div className="py-6 text-center text-[13px] text-faint">Sin reuniones hoy</div>
           )}
@@ -241,33 +241,48 @@ function QuickBox({ ai, shortcut }: { ai: AiStatus | null; shortcut: string | nu
   )
 }
 
-function DayCard({ d, label, checklists, skip }: { d: DayPlan; label: string; checklists: Map<string, string[]>; skip: Set<string> }) {
+type Checklists = Map<string, { items: string[]; done: Set<string> }>
+
+/** Un punto de la checklist de una reunión: se marca y desmarca; tachado hasta que acaba el día. */
+function CheckItem({ eventId, text, done }: { eventId: string; text: string; done: boolean }) {
+  return (
+    <li className="flex items-start gap-2">
+      <CheckButton small done={done} onClick={() => call('brief.check', eventId, text, !done)} />
+      <span className={done ? 'text-faint line-through' : ''}>{text}</span>
+    </li>
+  )
+}
+
+function DayCard({ d, label, checklists, skip }: { d: DayPlan; label: string; checklists: Checklists; skip: Set<string> }) {
   const entries = d.entries.filter((e) => !skip.has(e.s.item.id))
+  const pending = entries.filter((e) => !isDone(e.s)).length
   const empty = !d.events.length && !entries.length
   return (
     <Card className={`px-3 py-2.5 ${empty ? 'opacity-60' : ''}`}>
       <div className="mb-1 flex items-baseline gap-2">
         <span className="text-[13px] font-semibold first-letter:uppercase">{label}</span>
         <span className="ml-auto text-[11.5px] text-faint">
-          {[d.events.filter((e) => !e.allDay).length ? plural(d.events.filter((e) => !e.allDay).length, 'reunión', 'reuniones') : null, entries.length ? plural(entries.length, 'cosa', 'cosas') : null]
+          {[d.events.filter((e) => !e.allDay).length ? plural(d.events.filter((e) => !e.allDay).length, 'reunión', 'reuniones') : null, pending ? plural(pending, 'cosa', 'cosas') : null]
             .filter(Boolean)
             .join(' · ')}
         </span>
       </div>
       {empty ? <div className="py-2 text-[12.5px] text-faint">Libre</div> : null}
       {d.events.map((e) => {
-        const list = checklists.get(e.id) ?? []
+        const list = checklists.get(e.id)
         return (
           <div key={e.id} className="py-1 text-[12.5px]">
             <div className="flex gap-2">
               <span className="w-10 shrink-0 tabular-nums text-faint">{e.allDay ? 'Día' : time(e.start)}</span>
               <span className="min-w-0 flex-1 truncate">{e.title}</span>
             </div>
-            {list.map((c) => (
-              <div key={c} className="ml-12 flex gap-1.5 text-muted">
-                <span className="text-faint">○</span> {c}
-              </div>
-            ))}
+            {list?.items.length ? (
+              <ul className="ml-12 space-y-0.5 text-muted">
+                {list.items.map((c) => (
+                  <CheckItem key={c} eventId={e.id} text={c} done={list.done.has(c)} />
+                ))}
+              </ul>
+            ) : null}
           </div>
         )
       })}
@@ -282,21 +297,16 @@ function DayCard({ d, label, checklists, skip }: { d: DayPlan; label: string; ch
 function MiniRow({ s, note }: { s: ScoredItem; note: string | null }) {
   const { editItem } = useNav()
   const item = s.item
+  const done = isDone(s)
   return (
     <div className="flex items-start gap-2 py-1 text-[13px]">
-      <button
-        onClick={() => call('items.update', item.id, { status: 'done' })}
-        aria-label="Marcar como hecho"
-        className="mt-[3px] flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border border-line-strong text-transparent hover:border-success hover:text-success"
-      >
-        <Icon name="check" className="h-2.5 w-2.5" />
-      </button>
+      <CheckButton small done={done} onClick={() => call('items.update', item.id, { status: done ? 'active' : 'done' })} />
       <div className="min-w-0 flex-1">
-        <button className="text-left hover:underline" onClick={() => editItem(item)} title={item.context ?? undefined}>
+        <button className={`text-left hover:underline ${done ? 'text-faint line-through' : ''}`} onClick={() => editItem(item)} title={item.context ?? undefined}>
           {item.title}
           {item.person ? <span className="text-clay"> → {item.person}</span> : null}
         </button>
-        {note ? <div className="text-[11.5px] text-faint">{note}</div> : null}
+        {note && !done ? <div className="text-[11.5px] text-faint">{note}</div> : null}
       </div>
     </div>
   )
@@ -348,7 +358,7 @@ function Detected({ items }: { items: Item[] }) {
   )
 }
 
-function Meeting({ e, checklist }: { e: CalendarEvent; checklist: string[] }) {
+function Meeting({ e, checklist }: { e: CalendarEvent; checklist?: { items: string[]; done: Set<string> } }) {
   return (
     <div className="py-2.5">
       <div className="flex items-baseline gap-3">
@@ -362,12 +372,10 @@ function Meeting({ e, checklist }: { e: CalendarEvent; checklist: string[] }) {
           ) : null}
         </div>
       </div>
-      {checklist.length ? (
+      {checklist?.items.length ? (
         <ul className="mt-1 ml-14 space-y-0.5 text-[12.5px] text-muted">
-          {checklist.map((c) => (
-            <li key={c} className="flex gap-2">
-              <span className="text-faint">○</span> {c}
-            </li>
+          {checklist.items.map((c) => (
+            <CheckItem key={c} eventId={e.id} text={c} done={checklist.done.has(c)} />
           ))}
         </ul>
       ) : null}

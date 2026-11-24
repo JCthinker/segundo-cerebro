@@ -1,4 +1,4 @@
-import type { CalendarEvent, ScoredItem } from './types'
+import type { Brief, CalendarEvent, ScoredItem } from './types'
 import { addDays, diffDays, parseDay, toDay } from './dates'
 
 /** Una cosa por hacer colocada en el día en que toca ponerse con ella. */
@@ -21,6 +21,8 @@ export interface Plan {
   later: PlanEntry[]
   undated: ScoredItem[]
 }
+
+export const isDone = (s: ScoredItem): boolean => s.item.status === 'done'
 
 /** «el miércoles» si cae en la próxima semana; si no, «12 dic». */
 export function dueLabel(today: string, due: string): string {
@@ -55,6 +57,11 @@ export function planDays(ranked: ScoredItem[], events: CalendarEvent[], today: s
 
   for (const s of ranked) {
     const due = s.item.dueDate
+    // Lo hecho hoy se queda donde estaba (tachado); si estaba atrasado, en hoy.
+    if (s.item.status === 'done' && due && due < today) {
+      days[0].entries.push({ s, note: null })
+      continue
+    }
     if (!due) {
       undated.push(s)
       continue
@@ -71,6 +78,11 @@ export function planDays(ranked: ScoredItem[], events: CalendarEvent[], today: s
   }
 
   later.sort((a, b) => a.s.item.dueDate!.localeCompare(b.s.item.dueDate!))
+  // Lo tachado, al final de cada lista.
+  const doneLast = <T>(list: T[], item: (x: T) => ScoredItem) => list.sort((a, b) => Number(isDone(item(a))) - Number(isDone(item(b))))
+  for (const d of days) doneLast(d.entries, (e) => e.s)
+  doneLast(later, (e) => e.s)
+  doneLast(undated, (s) => s)
   return { overdue, days, later, undated }
 }
 
@@ -81,4 +93,29 @@ export function planDays(ranked: ScoredItem[], events: CalendarEvent[], today: s
  */
 export function todayIds(plan: Plan): Set<string> {
   return new Set([...plan.overdue.map((e) => e.s.item.id), ...plan.days[0].entries.map((e) => e.s.item.id), ...plan.undated.map((s) => s.item.id)])
+}
+
+/** Marca o desmarca un punto de la checklist de una reunión. */
+export function toggleCheck(brief: Brief, eventId: string, text: string, on: boolean): Brief {
+  return {
+    ...brief,
+    prepare: brief.prepare.map((p) => {
+      if (p.eventId !== eventId) return p
+      const rest = (p.done ?? []).filter((d) => d !== text)
+      return { ...p, done: on ? [...rest, text] : rest }
+    })
+  }
+}
+
+/** Al repasar el día otra vez, conserva lo que ya habías marcado si el punto sigue en la lista. */
+export function keepChecks(prev: Brief | null, next: Brief): Brief {
+  if (!prev || prev.date !== next.date) return next
+  return {
+    ...next,
+    prepare: next.prepare.map((p) => {
+      const old = prev.prepare.find((o) => o.eventId === p.eventId)?.done ?? []
+      const done = old.filter((d) => p.checklist.includes(d))
+      return done.length ? { ...p, done } : p
+    })
+  }
 }

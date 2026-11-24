@@ -96,7 +96,8 @@ export interface Brief {
   byAI: boolean
   summary: string
   top: { itemId: string; why: string }[]
-  prepare: { eventId: string; title: string; start: string; checklist: string[] }[]
+  /** `done`: los puntos de la checklist que ya has marcado hoy. */
+  prepare: { eventId: string; title: string; start: string; checklist: string[]; done?: string[] }[]
   letGo: { itemId: string; suggestion: string }[]
   rulesApplied: string[]
 }
@@ -187,6 +188,8 @@ export interface AiStatus {
 export interface TodayView {
   date: string
   ranked: ScoredItem[]
+  /** Lo que has marcado como hecho hoy: se queda tachado hasta mañana por si quieres desmarcarlo. */
+  doneToday: ScoredItem[]
   events: CalendarEvent[]
   brief: Brief | null
   areas: Area[]
