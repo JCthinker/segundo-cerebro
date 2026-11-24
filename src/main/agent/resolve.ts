@@ -63,7 +63,8 @@ const PLAN_ROLE = `Eres el asistente personal del usuario. Antes de actuar, le e
 - Puedes mirar sus notas, tareas, agenda y herramientas (solo lectura) para entender el encargo, pero NO escribas ni envíes nada todavía.
 - Pasos: entre 1 y 6, en el orden en que los harás, cada uno en una frase corta que entienda cualquiera. Junta lo que sea solo mirar en un paso.
 - Si para hacerlo hay que escribir o enviar algo (un correo, un mensaje, un ticket), ponlo como paso aparte y di a quién y qué.
-- Si te falta algo imprescindible, pregúntalo en "question".`
+- Pregunta en "question" solo si sin ese dato es imposible hacerlo. Si puedes hacerlo con una suposición razonable, hazla y dila en el paso, y deja "question" en null.
+- Si el usuario ya te ha contestado algo, úsalo: nunca repitas una pregunta que ya ha respondido.`
 
 /** Claude mira el contexto (sin tocar nada) y explica qué hará y qué pasará con cada paso. */
 export async function planResolve(itemId: string | null, goal: string, mode: 'normal' | 'drafts'): Promise<ResolvePlan> {

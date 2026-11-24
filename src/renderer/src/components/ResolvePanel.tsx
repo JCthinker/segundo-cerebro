@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ActionRun, ApprovalRequest, Item, ResolvePlan, RunLogEntry, ToolMode } from '@shared/types'
 import { serverLabel, serverOf, shortToolName } from '@shared/permissions'
-import { buildGoal } from '@shared/conversation'
+import { buildGoal, isGoAhead } from '@shared/conversation'
 import { dueLabel } from '@shared/plan'
 import { toDay } from '@shared/dates'
 import { call, useAction, useEvent } from '../api'
@@ -123,6 +123,8 @@ export function ResolvePanel({ item, initialGoal, onClose }: { item: Item | null
   const send = useAction(async () => {
     const said = text.trim()
     if (!said && !item && !messages.length) return
+    // «Sí», «adelante», «vale»… con un plan delante: se ejecuta, no se vuelve a planear.
+    if (stage === 'plan' && plan && isGoAhead(said)) return start.run()
     if (run && running) {
       await call('resolve.cancel', run.id)
       setApprovals([])
@@ -140,12 +142,22 @@ export function ResolvePanel({ item, initialGoal, onClose }: { item: Item | null
     } catch (e) {
       setStage(run ? 'run' : plan ? 'plan' : 'ask')
       throw e
-    } finally {
-      input.current?.focus()
     }
   })
+  // Cuando Claude termina de pensar, el cursor vuelve a la caja para contestarle.
+  useEffect(() => {
+    if (stage !== 'planning') input.current?.focus()
+  }, [stage])
+  /** «Hazlo»: ejecuta el plan. Lo que haya escrito abajo (una respuesta, un matiz) va con él, sin rehacer el plan. */
   const start = useAction(async () => {
-    const r = await call<ActionRun>('resolve.start', item?.id ?? null, buildGoal(messages, done()), mode, plan)
+    const said = text.trim()
+    const all = said && !isGoAhead(said) ? [...messages, said] : messages
+    if (said) {
+      setThread((t) => [...t, { kind: 'user', text: said }])
+      setMessages(all)
+      setText('')
+    }
+    const r = await call<ActionRun>('resolve.start', item?.id ?? null, buildGoal(all, done()), mode, plan)
     setRuns((all) => ({ ...all, [r.id]: r }))
     setRunId(r.id)
     setThread((t) => [...t, { kind: 'run', runId: r.id }])
@@ -179,8 +191,8 @@ export function ResolvePanel({ item, initialGoal, onClose }: { item: Item | null
   const placeholder =
     stage === 'plan'
       ? plan?.question
-        ? 'Contesta a Claude o dile qué cambiar…'
-        : '¿Quieres cambiar algo del plan? Díselo aquí…'
+        ? 'Contesta a Claude aquí y pulsa Intro: lo hará con tu respuesta…'
+        : 'Escribe «sí» para que lo haga, o dile qué cambiar…'
       : stage === 'run'
         ? running
           ? 'Si quieres cambiar algo, escríbelo: Claude parará y te propondrá un plan nuevo…'
@@ -266,7 +278,9 @@ export function ResolvePanel({ item, initialGoal, onClose }: { item: Item | null
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault()
-              if (hasText || (stage === 'ask' && item)) void send.run()
+              // Si Claude había preguntado algo, tu respuesta va directa a «Hazlo».
+              if (stage === 'plan' && plan?.question && hasText) void start.run()
+              else if (hasText || (stage === 'ask' && item)) void send.run()
             }
           }}
           placeholder={placeholder}
@@ -277,17 +291,24 @@ export function ResolvePanel({ item, initialGoal, onClose }: { item: Item | null
             Solo dejarlo en borrador, sin enviar nada
           </label>
           <div className="ml-auto flex gap-2">
-            {stage === 'planning' ? null : hasText ? (
+            {stage === 'planning' ? null : stage === 'plan' ? (
+              <>
+                {hasText && !isGoAhead(text) ? (
+                  <Button variant="secondary" busy={send.busy} disabled={start.busy} onClick={() => send.run()}>
+                    <Icon name="refresh" /> Rehacer el plan
+                  </Button>
+                ) : null}
+                <Button variant="claude" busy={start.busy} disabled={send.busy} onClick={() => start.run()}>
+                  <Icon name="check" /> Hazlo
+                </Button>
+              </>
+            ) : hasText ? (
               <Button variant="claude" busy={send.busy} onClick={() => send.run()}>
-                <Icon name="arrow" /> {running ? 'Parar y cambiar el plan' : stage === 'plan' ? 'Cambiar el plan' : 'Ver qué hará'}
+                <Icon name="arrow" /> {running ? 'Parar y cambiar el plan' : 'Ver qué hará'}
               </Button>
             ) : stage === 'ask' ? (
               <Button variant="claude" busy={send.busy} disabled={!item} onClick={() => send.run()}>
                 Ver qué hará
-              </Button>
-            ) : stage === 'plan' ? (
-              <Button variant="claude" busy={start.busy} onClick={() => start.run()}>
-                <Icon name="check" /> Hazlo
               </Button>
             ) : running ? (
               <Button variant="danger" onClick={() => run && call('resolve.cancel', run.id)}>
@@ -348,7 +369,7 @@ function PlanView({ plan, current }: { plan: ResolvePlan; current: boolean }) {
       </ol>
       {plan.question ? (
         <div className="mt-3 rounded-lg bg-warning-bg px-3 py-2.5 text-[14px] text-warning">
-          <span className="font-medium">Claude te pregunta:</span> {plan.question} Contéstale abajo.
+          <span className="font-medium">Claude te pregunta:</span> {plan.question} Contéstale abajo y pulsa «Hazlo»: lo hará con tu respuesta.
         </div>
       ) : null}
       <p className="mt-3 text-[12.5px] text-faint">

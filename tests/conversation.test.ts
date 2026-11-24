@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { buildGoal } from '../src/shared/conversation'
+import { buildGoal, isGoAhead } from '../src/shared/conversation'
+
+describe('isGoAhead', () => {
+  it('reconoce un «sí, adelante» dicho de muchas formas', () => {
+    for (const t of ['sí', 'Sí, hazlo', 'vale', 'OK!', 'adelante', 'Dale', 'perfecto, adelante', 'me parece bien', 'sí, por favor', 'Ejecútalo', 'de acuerdo'])
+      expect(isGoAhead(t), t).toBe(true)
+  })
+
+  it('no confunde un cambio o una respuesta con un sí', () => {
+    for (const t of ['', 'no', 'sí, pero mándalo por Slack', 'mejor por correo', 'los comentarios están en la nota de ayer', 'no lo hagas'])
+      expect(isGoAhead(t), t).toBe(false)
+  })
+})
 
 describe('buildGoal', () => {
   it('sin mensajes queda vacío', () => {
