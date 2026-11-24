@@ -202,6 +202,15 @@ export interface TodayView {
   encargos: number
   /** Si ya respondiste a «lo que toca esta semana» de este brief. */
   weeklyAnswered: boolean
+  /** Por reunión: tipo, qué llevar según Jira y su nota, si existe. */
+  meetings: Record<string, MeetingInfo>
+}
+
+export interface MeetingInfo {
+  type: import('./meetings').MeetingType
+  label: string
+  jira: string[]
+  noteId: string | null
 }
 
 export const KIND_LABEL: Record<ItemKind, string> = {

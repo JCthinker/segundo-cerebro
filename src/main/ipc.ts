@@ -4,7 +4,7 @@ import { addDays, toDay } from '@shared/dates'
 import { rankItems, scoreItem } from '@shared/priority'
 import { toggleCheck } from '@shared/plan'
 import { buildHistory } from '@shared/history'
-import type { TodayView } from '@shared/types'
+import type { CalendarEvent, MeetingInfo, TodayView } from '@shared/types'
 import * as db from './db'
 import { dataChanged } from './events'
 import { getSettings, updateSettings } from './settings'
@@ -22,6 +22,8 @@ import { capture, connectorEventsSourceId, importFile, importTranscript, isCalen
 import { shortcutLabel } from './shortcut'
 import { checkForUpdate, installNow, updateStatus } from './updater'
 import { flowSignals, mergeFlow } from '@shared/flow'
+import { MEETING_LABEL, meetingType, prepFromJira } from '@shared/meetings'
+import { meetingNoteIds, noteForMeeting, reviewNote, type ReviewEntry } from './meetings'
 import { hiddenFlow, hideFlow, learn, listLessons } from './learning'
 import { getSnapshot, jiraConnector, jiraProjects, jiraSyncing, lastJiraError, syncJira } from './jira'
 
@@ -72,8 +74,23 @@ function todayView(): TodayView {
     proposed,
     flow: mergeFlow(flowSignals(getSnapshot(), events, new Date()), brief?.flow, hiddenFlow(), date),
     encargos: active.filter((i) => i.kind === 'promise').length,
-    weeklyAnswered: !!brief && db.getSetting('weekly.answered') === brief.generatedAt
+    weeklyAnswered: !!brief && db.getSetting('weekly.answered') === brief.generatedAt,
+    meetings: meetingInfo(events)
   }
+}
+
+function meetingInfo(events: CalendarEvent[]): Record<string, MeetingInfo> {
+  const snap = getSnapshot()
+  const notes = meetingNoteIds()
+  const now = new Date()
+  return Object.fromEntries(
+    events
+      .filter((e) => !e.allDay)
+      .map((e) => {
+        const type = meetingType(e.title)
+        return [e.id, { type, label: MEETING_LABEL[type], jira: prepFromJira(type, snap, now), noteId: notes[e.id] ?? null }]
+      })
+  )
 }
 
 const api: Record<string, (...args: any[]) => unknown> = {
@@ -194,6 +211,27 @@ const api: Record<string, (...args: any[]) => unknown> = {
   },
   'notes.extract': (id: string, force?: boolean) => extractNote(id, !!force),
   'notes.search': (q: string) => db.searchNotes(q, 20),
+  'meeting.note': (eventId: string) => {
+    const e = db.listEvents(dayRange(addDays(toDay(new Date()), -30)).from, dayRange(addDays(toDay(new Date()), 60)).to).find((x) => x.id === eventId)
+    if (!e) throw new Error('No encuentro esa reunión en tu calendario.')
+    const id = noteForMeeting(e)
+    dataChanged('notes')
+    return id
+  },
+  'notes.review': (id: string) => withAi(() => reviewNote(id)),
+  /** Reparte lo revisado: encargos a tu lista; lo de Jira se lo pasa a Claude (que pide OK antes de escribir). */
+  'notes.distribute': (id: string, chosen: ReviewEntry[], skipped: ReviewEntry[]) => {
+    const note = db.getNote(id)
+    for (const e of chosen.filter((x) => x.tag === 'ENCARGO'))
+      db.createItem({ kind: 'promise', title: e.text, person: e.person, dueDate: null, prepDays: 0, areaId: null, status: 'active', sourceType: 'note', sourceRef: id, sourceSnippet: null, sourceTool: null, context: `De la nota «${note?.title ?? ''}»` })
+    // Lo que la detección automática había propuesto de esta nota ya queda repartido.
+    for (const i of db.listItems({ status: ['proposed'] }).filter((x) => x.sourceRef === id))
+      db.updateItem(i.id, { status: 'dismissed', dismissReason: 'Repartido al revisar la nota' })
+    for (const e of skipped) learn('repartir notas', `No quiso repartir: [${e.tag}] ${e.text}`)
+    dataChanged('items')
+    db.setSetting(`note.distributed.${id}`, new Date().toISOString())
+    return true
+  },
 
   // entradas
   capture: (text: string) => withAi(() => capture(text)),

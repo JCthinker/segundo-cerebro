@@ -1,6 +1,7 @@
 import { addDays, toDay } from '@shared/dates'
 import { fallbackWeekly, flowSignals, type FlowAction, type FlowEvent } from '@shared/flow'
 import { buildBoard } from '@shared/jira'
+import { MEETING_LABEL, meetingType, prepFromJira } from '@shared/meetings'
 import { keepChecks } from '@shared/plan'
 import { letGoCandidates, rankItems } from '@shared/priority'
 import type { Brief, CalendarEvent, ScoredItem } from '@shared/types'
@@ -98,7 +99,7 @@ Los elementos de tipo «promise» son encargos: algo que otra persona le ha pedi
 Tienes una lista de elementos ya puntuados por una fórmula (compromiso, urgencia con margen de preparación, peso del área) y la agenda.
 Tu trabajo:
 1. Elegir las 3 cosas de hoy. Parte del orden de la puntuación, pero ajústalo con las reglas de «Mi flujo» y la agenda (huecos libres, días cargados). Explica el porqué en pocas palabras.
-2. Para cada reunión de hoy y de mañana, una checklist corta (2-4 puntos) de qué preparar antes. Usa search_notes y list_items para encontrar contexto relacionado con el título o los asistentes. Si no hay nada que preparar, deja la lista vacía.
+2. Para cada reunión de hoy y de mañana, una checklist corta (2-4 puntos) de qué preparar antes. En «yaSabidoDeJira» está lo que la app ya muestra sacado de Jira: no lo repitas, complétalo (contexto de notas, qué decidir, a quién preguntar). Usa search_notes y list_items para encontrar contexto relacionado con el título o los asistentes. Si no hay nada que preparar, deja la lista vacía.
 3. Proponer qué puede soltar (aplazar o delegar). Nunca encargos de otras personas.
 4. Indicar qué reglas de «Mi flujo» han influido.
 En «nuevoPorConfirmar» está lo recién detectado en notas y herramientas (Jira, correo…) que el usuario aún no ha confirmado. No lo pongas en las 3 cosas de hoy, pero si algo es importante o urgente, menciónalo en el resumen para que lo revise.
@@ -130,13 +131,17 @@ export async function generateBrief(useAI: boolean): Promise<Brief> {
     return kept
   }
 
+  const meetingForPrompt = (e: CalendarEvent) => {
+    const type = meetingType(e.title)
+    return { id: e.id, titulo: e.title, tipo: MEETING_LABEL[type], inicio: e.start, fin: e.end, asistentes: e.attendees, notas: e.description, yaSabidoDeJira: prepFromJira(type, snap, new Date()) }
+  }
   const data = {
     elementos: ranked.slice(0, 25).map((s) => ({
       id: s.item.id, tipo: s.item.kind, titulo: s.item.title, persona: s.item.person, vence: s.item.dueDate,
       margenDias: s.item.prepDays, puntuacion: s.score, motivos: s.reasons, enRiesgo: s.atRisk
     })),
-    agendaHoy: events.map((e) => ({ id: e.id, titulo: e.title, inicio: e.start, fin: e.end, asistentes: e.attendees, notas: e.description })),
-    agendaManana: tomorrowEvents.map((e) => ({ id: e.id, titulo: e.title, inicio: e.start, fin: e.end, asistentes: e.attendees, notas: e.description })),
+    agendaHoy: events.map(meetingForPrompt),
+    agendaManana: tomorrowEvents.map(meetingForPrompt),
     jira: snap
       ? buildBoard(snap, new Date()).map((c) => ({ paso: c.label, iniciativas: c.cards.map((x) => `${x.key} ${x.title}${x.quarter ? ` (${x.quarter})` : ''}${x.warnings.length ? ` — ${x.warnings.map((w) => w.text).join(', ')}` : ''}`) }))
       : 'Sin leer todavía',

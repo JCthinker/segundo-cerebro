@@ -1,3 +1,4 @@
+import { ReviewNote } from "../components/ReviewNote";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { AiStatus, Area, Item, Note } from "@shared/types";
 import { KIND_LABEL } from "@shared/types";
@@ -320,6 +321,7 @@ function NoteView({
   onCreateChild: () => void;
 }) {
   const { go, editItem } = useNav();
+  const [reviewing, setReviewing] = useState(false);
   const [note, setNote] = useState<Note | null>(null);
   const [title, setTitle] = useState("");
   const [saved, setSaved] = useState(true);
@@ -411,6 +413,15 @@ function NoteView({
           <Button
             size="sm"
             variant="ghost"
+            disabled={!ai?.ok}
+            onClick={() => void flush().then(() => setReviewing(true))}
+            title="Claude separa lo que va a Jira (decisiones, tareas FP, preguntas) de lo que son encargos para ti"
+          >
+            <Icon name="route" /> Revisar y repartir
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
             onClick={async () => {
               const inside = descendants(notes, id).length;
               if (!window.confirm(deleteNoteQuestion(title, inside))) return;
@@ -442,6 +453,7 @@ function NoteView({
         }}
       />
       <ErrorNote>{extract.error}</ErrorNote>
+      {reviewing ? <ReviewNote noteId={id} title={title} onClose={() => setReviewing(false)} /> : null}
 
       <SubNotes notes={notes} id={id} onCreate={onCreateChild} />
 

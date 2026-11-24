@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { AiStatus, Brief, CalendarEvent, FlowItem, Item, ScoredItem, TodayView } from '@shared/types'
+import type { AiStatus, Brief, CalendarEvent, FlowItem, Item, MeetingInfo, ScoredItem, TodayView } from '@shared/types'
 import { formatDayLong, parseDay } from '@shared/dates'
 import { isDone, planDays, todayIds, type DayPlan, type PlanEntry } from '@shared/plan'
 import { call, useAction, useData } from '../api'
@@ -120,7 +120,7 @@ export function Dashboard({ ai, shortcut }: { ai: AiStatus | null; shortcut: str
         </Card>
         <Card className="divide-y divide-line px-4 lg:col-span-2">
           {today.events.length ? (
-            today.events.map((e) => <Meeting key={e.id} e={e} checklist={checklists.get(e.id)} />)
+            today.events.map((e) => <Meeting key={e.id} e={e} checklist={checklists.get(e.id)} info={data.meetings?.[e.id]} />)
           ) : (
             <div className="py-6 text-center text-[13px] text-faint">Sin reuniones hoy</div>
           )}
@@ -130,7 +130,7 @@ export function Dashboard({ ai, shortcut }: { ai: AiStatus | null; shortcut: str
       <SectionLabel>Próximos días</SectionLabel>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
         {next.map((d, i) => (
-          <DayCard key={d.day} d={d} label={i === 0 ? 'Mañana' : weekday(d.day)} checklists={checklists} skip={shown} />
+          <DayCard key={d.day} d={d} label={i === 0 ? 'Mañana' : weekday(d.day)} checklists={checklists} skip={shown} meetings={data.meetings ?? {}} />
         ))}
       </div>
 
@@ -247,7 +247,8 @@ function CheckItem({ eventId, text, done }: { eventId: string; text: string; don
   )
 }
 
-function DayCard({ d, label, checklists, skip }: { d: DayPlan; label: string; checklists: Checklists; skip: Set<string> }) {
+function DayCard({ d, label, checklists, skip, meetings }: { d: DayPlan; label: string; checklists: Checklists; skip: Set<string>; meetings: Record<string, MeetingInfo> }) {
+  const { go } = useNav()
   const entries = d.entries.filter((e) => !skip.has(e.s.item.id))
   const pending = entries.filter((e) => !isDone(e.s)).length
   const empty = !d.events.length && !entries.length
@@ -268,8 +269,22 @@ function DayCard({ d, label, checklists, skip }: { d: DayPlan; label: string; ch
           <div key={e.id} className="py-1 text-[12.5px]">
             <div className="flex gap-2">
               <span className="w-10 shrink-0 tabular-nums text-faint">{e.allDay ? 'Día' : time(e.start)}</span>
-              <span className="min-w-0 flex-1 truncate">{e.title}</span>
+              <button
+                className="min-w-0 flex-1 truncate text-left hover:underline"
+                title={meetings[e.id]?.noteId ? 'Ver notas' : 'Tomar notas'}
+                onClick={async () => !e.allDay && go('notes', await call<string>('meeting.note', e.id))}
+              >
+                {e.title}
+              </button>
+              {meetings[e.id] && meetings[e.id].type !== 'other' ? <span className="shrink-0 text-[11px] text-clay">{meetings[e.id].label}</span> : null}
             </div>
+            {meetings[e.id]?.jira.length ? (
+              <ul className="ml-12 list-disc pl-3 text-[11.5px] text-faint">
+                {meetings[e.id].jira.slice(0, 3).map((j) => (
+                  <li key={j}>{j}</li>
+                ))}
+              </ul>
+            ) : null}
             {list?.items.length ? (
               <ul className="ml-12 space-y-0.5 text-muted">
                 {list.items.map((c) => (
@@ -352,13 +367,19 @@ function Detected({ items }: { items: Item[] }) {
   )
 }
 
-function Meeting({ e, checklist }: { e: CalendarEvent; checklist?: { items: string[]; done: Set<string> } }) {
+function Meeting({ e, checklist, info }: { e: CalendarEvent; checklist?: { items: string[]; done: Set<string> }; info?: MeetingInfo }) {
+  const { go, talk } = useNav()
+  const openNote = useAction(async () => go('notes', await call<string>('meeting.note', e.id)))
+  const typed = info && info.type !== 'other'
   return (
     <div className="py-2.5">
       <div className="flex items-baseline gap-3">
         <span className="w-11 shrink-0 text-[13px] font-medium tabular-nums">{e.allDay ? 'Día' : time(e.start)}</span>
         <div className="min-w-0 flex-1">
-          <div className="font-medium">{e.title}</div>
+          <div className="font-medium">
+            {e.title}
+            {typed ? <span className="ml-2 text-[11.5px] font-normal text-clay">{info.label}</span> : null}
+          </div>
           {e.attendees.length || e.location ? (
             <div className="truncate text-[12px] text-faint">
               {[e.location, e.attendees.length === 1 ? `Con ${e.attendees[0]}` : e.attendees.length ? `${e.attendees.length} personas` : null].filter(Boolean).join(' · ')}
@@ -366,6 +387,16 @@ function Meeting({ e, checklist }: { e: CalendarEvent; checklist?: { items: stri
           ) : null}
         </div>
       </div>
+      {info?.jira.length ? (
+        <div className="mt-1.5 ml-14">
+          <div className="text-[11px] font-medium tracking-wide text-faint uppercase">Llevar, según Jira</div>
+          <ul className="mt-0.5 list-disc space-y-0.5 pl-4 text-[12.5px] text-muted">
+            {info.jira.map((j) => (
+              <li key={j}>{j}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       {checklist?.items.length ? (
         <ul className="mt-1 ml-14 space-y-0.5 text-[12.5px] text-muted">
           {checklist.items.map((c) => (
@@ -373,6 +404,27 @@ function Meeting({ e, checklist }: { e: CalendarEvent; checklist?: { items: stri
           ))}
         </ul>
       ) : null}
+      {e.allDay ? null : (
+        <div className="mt-1.5 ml-14 flex gap-1.5">
+          <Button size="sm" variant="ghost" busy={openNote.busy} onClick={() => openNote.run()}>
+            <Icon name="notes" /> {info?.noteId ? 'Ver notas' : 'Tomar notas'}
+          </Button>
+          {typed ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() =>
+                talk(
+                  `Ayúdame a preparar la reunión «${e.title}» (${info.label}, ${new Date(e.start).toLocaleString('es-ES', { weekday: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}). Busca en mis notas de la app y en las transcripciones de Google Drive lo que tenga que ver, mira las iniciativas en Jira y dime qué llevar.`
+                )
+              }
+            >
+              <Icon name="sparkles" className="text-clay" /> Preparar con Claude
+            </Button>
+          ) : null}
+        </div>
+      )}
+      <ErrorNote>{openNote.error}</ErrorNote>
     </div>
   )
 }
