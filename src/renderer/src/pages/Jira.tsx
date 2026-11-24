@@ -3,6 +3,7 @@ import { buildBoard, matches, readAgo, taskReady, type BoardCard, type JiraSnaps
 import { call, useAction, useData } from '../api'
 import { Button, Card, Empty, ErrorNote, Icon, inputBase, PageHeader, Pill, Spinner } from '../components/ui'
 import { useNav } from '../nav'
+import { SprintTab } from '../components/SprintTab'
 
 interface JiraView {
   snapshot: JiraSnapshot | null
@@ -12,7 +13,7 @@ interface JiraView {
   projects: { road: string; fp: string }
 }
 
-type Tab = 'road' | 'fp' | 'epics'
+type Tab = 'road' | 'sprint' | 'fp' | 'epics'
 
 const open = (url: string | null) => {
   if (url) void call('shell.open', url)
@@ -127,6 +128,7 @@ export function Jira() {
         {(
           [
             ['road', `Iniciativas ${data.projects.road} · ${snap.initiatives.length}`],
+            ['sprint', 'Sprint y épicas'],
             ['fp', `Tareas ${data.projects.fp} · ${tasks.length}`],
             ['epics', `Épicas · ${snap.epics.length}`]
           ] as [Tab, string][]
@@ -177,6 +179,8 @@ export function Jira() {
           </div>
         </div>
       ) : null}
+
+      {tab === 'sprint' ? <SprintTab snap={snap} /> : null}
 
       {tab === 'fp' ? <TaskTable tasks={tasks.filter((t) => matches(`${t.key} ${t.title}`, q) && (!onlyWarn || !taskReady(t)))} /> : null}
 
