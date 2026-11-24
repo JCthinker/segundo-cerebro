@@ -1,7 +1,7 @@
 import { createContext, useContext } from 'react'
 import type { Item } from '@shared/types'
 
-export type Page = 'today' | 'jira' | 'notes' | 'history' | 'settings' | 'sources' | 'workflow'
+export type Page = 'today' | 'encargos' | 'jira' | 'notes' | 'history' | 'settings' | 'sources' | 'workflow'
 
 export interface Nav {
   page: Page

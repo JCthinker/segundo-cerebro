@@ -21,6 +21,8 @@ import { appendToSection, suggestRules } from './agent/suggest-rules'
 import { capture, connectorEventsSourceId, importFile, importTranscript, isCalendarConnector, syncConnectorCalendars, syncIcs, syncMcpSource } from './sources'
 import { shortcutLabel } from './shortcut'
 import { checkForUpdate, installNow, updateStatus } from './updater'
+import { flowSignals, mergeFlow } from '@shared/flow'
+import { hiddenFlow, hideFlow, learn, listLessons } from './learning'
 import { getSnapshot, jiraConnector, jiraProjects, jiraSyncing, lastJiraError, syncJira } from './jira'
 
 /** Llamadas que usan la IA: anotan el estado de la conexión. */
@@ -53,18 +55,24 @@ function todayView(): TodayView {
   const from = dayRange(date).from
   const to = dayRange(addDays(date, 6)).to
   const proposed = db.listItems({ status: ['proposed'] })
+  const events = db.listEvents(from, to)
+  const brief = db.getBrief(date)
+  const active = db.listItems({ status: ['active'] })
   return {
     date,
-    ranked: rankItems(db.listItems({ status: ['active'] }), date, areas),
+    ranked: rankItems(active, date, areas),
     doneToday: db
       .listItems({ status: ['done'] })
       .filter((i) => i.doneAt && toDay(new Date(i.doneAt)) === date)
       .map((i) => scoreItem(i, date, areas)),
-    events: db.listEvents(from, to),
-    brief: db.getBrief(date),
+    events,
+    brief,
     areas,
     proposedCount: proposed.length,
-    proposed
+    proposed,
+    flow: mergeFlow(flowSignals(getSnapshot(), events, new Date()), brief?.flow, hiddenFlow(), date),
+    encargos: active.filter((i) => i.kind === 'promise').length,
+    weeklyAnswered: !!brief && db.getSetting('weekly.answered') === brief.generatedAt
   }
 }
 
@@ -112,6 +120,34 @@ const api: Record<string, (...args: any[]) => unknown> = {
     const b = useAI ? await withAi(() => generateBrief(true)) : await generateBrief(false)
     dataChanged('brief')
     return b
+  },
+
+  'brief.react': (agree: boolean, reason?: string) => {
+    const b = db.getBrief(toDay(new Date()))
+    if (b) db.setSetting('weekly.answered', b.generatedAt)
+    if (!agree) learn('lo que toca esta semana', `No estaba de acuerdo con «${b?.weekly ?? ''}». ${reason ? `Dijo: ${reason}` : ''}`)
+    dataChanged('brief')
+    return true
+  },
+  'flow.hide': (key: string, how: 'later' | 'notNeeded' | 'done', title: string) => {
+    hideFlow(key, how, title)
+    dataChanged('brief')
+    return true
+  },
+  'learning.list': () => listLessons(),
+
+  // encargos: lo que te piden otras personas
+  'encargos.get': () => {
+    const date = toDay(new Date())
+    const areas = db.listAreas()
+    const active = rankItems(db.listItems({ status: ['active'] }).filter((i) => i.kind === 'promise'), date, areas)
+    const done = db
+      .listItems({ status: ['done'] })
+      .filter((i) => i.kind === 'promise')
+      .sort((a, b) => (b.doneAt ?? '').localeCompare(a.doneAt ?? ''))
+      .slice(0, 40)
+      .map((i) => scoreItem(i, date, areas))
+    return { date, areas, active, done }
   },
 
   // elementos

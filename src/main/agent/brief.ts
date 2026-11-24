@@ -1,8 +1,11 @@
 import { addDays, toDay } from '@shared/dates'
+import { fallbackWeekly, flowSignals, type FlowAction, type FlowEvent } from '@shared/flow'
+import { buildBoard } from '@shared/jira'
 import { keepChecks } from '@shared/plan'
 import { letGoCandidates, rankItems } from '@shared/priority'
 import type { Brief, CalendarEvent, ScoredItem } from '@shared/types'
 import * as db from '../db'
+import { getSnapshot } from '../jira'
 import { sweepConnectors, syncAllCalendars, syncAllPulls } from '../sources'
 import { cerebroServer } from './app-mcp'
 import { baseSystem } from './context'
@@ -15,12 +18,12 @@ export function dayRange(day: string): { from: string; to: string } {
 }
 
 /** Brief sin IA: siempre disponible. */
-export function fallbackBrief(day: string, ranked: ScoredItem[], events: CalendarEvent[], upcoming: CalendarEvent[] = events): Brief {
+export function fallbackBrief(day: string, ranked: ScoredItem[], events: CalendarEvent[], upcoming: CalendarEvent[] = events, flow: FlowAction[] = [], week: FlowEvent[] = []): Brief {
   const meetings = events.filter((e) => !e.allDay)
   const top = ranked.slice(0, 3)
   const promisesDue = ranked.filter((s) => s.atRisk).length
   const parts = [`${meetings.length} ${meetings.length === 1 ? 'reunión' : 'reuniones'}`]
-  if (promisesDue) parts.push(`${promisesDue} ${promisesDue === 1 ? 'promesa' : 'promesas'} en riesgo`)
+  if (promisesDue) parts.push(`${promisesDue} ${promisesDue === 1 ? 'cosa' : 'cosas'} en riesgo`)
   return {
     date: day,
     generatedAt: new Date().toISOString(),
@@ -31,16 +34,33 @@ export function fallbackBrief(day: string, ranked: ScoredItem[], events: Calenda
     top: top.map((s) => ({ itemId: s.item.id, why: s.reasons.join(' · ') })),
     prepare: upcoming.filter((e) => !e.allDay).map((e) => ({ eventId: e.id, title: e.title, start: e.start, checklist: [] })),
     letGo: letGoCandidates(ranked).map((s) => ({ itemId: s.item.id, suggestion: 'Puede esperar' })),
-    rulesApplied: []
+    rulesApplied: [],
+    weekly: flow.length || week.length ? fallbackWeekly(flow, week, new Date()) : undefined,
+    flow: flow.map((f) => ({ key: f.key, title: f.title, why: f.why }))
   }
+}
+
+/** Agenda de los próximos 7 días, para saber cuándo son el grooming y la sprint planning. */
+function weekEvents(day: string): CalendarEvent[] {
+  return db.listEvents(dayRange(day).from, dayRange(addDays(day, 6)).to)
 }
 
 const BRIEF_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['summary', 'top', 'prepare', 'letGo', 'rulesApplied'],
+  required: ['weekly', 'flow', 'summary', 'top', 'prepare', 'letGo', 'rulesApplied'],
   properties: {
-    summary: { type: 'string', description: 'Una o dos frases: cómo es el día y por dónde empezar' },
+    weekly: { type: 'string', description: '«Lo que toca esta semana»: como mucho 3 frases cortas (máx. 70 palabras) sobre el flujo de producto (qué iniciativas empujar, qué preparar para el grooming y la sprint planning, qué medir) y por qué' },
+    flow: {
+      type: 'array',
+      maxItems: 6,
+      description: 'Flujo de producto para hoy, en orden. Usa las claves de accionesFlujo; si propones algo tuyo, clave «ai:» + algo corto',
+      items: {
+        type: 'object', additionalProperties: false, required: ['key', 'title', 'why'],
+        properties: { key: { type: 'string' }, title: { type: 'string' }, why: { type: 'string', description: 'Por qué hoy, en una frase' } }
+      }
+    },
+    summary: { type: 'string', description: 'Una o dos frases sobre el día: reuniones, tareas y encargos. No repitas lo de Jira, que ya va en weekly y flow' },
     top: {
       type: 'array',
       maxItems: 3,
@@ -68,12 +88,18 @@ const BRIEF_SCHEMA = {
   }
 } as const
 
-const BRIEF_ROLE = `Eres el asistente personal del usuario y preparas su brief diario.
+const BRIEF_ROLE = `Eres el asistente personal del usuario, un product manager, y preparas su brief diario.
+Su trabajo principal es que Jira (ROAD: iniciativas; FP: tareas técnicas y épicas) esté al día y claro para el equipo de desarrollo.
+Primero:
+A. «weekly»: lo que toca esta semana en el flujo de producto. Mira «jira» (cuántas iniciativas hay en cada paso), «accionesFlujo» (lo que la app ha detectado que falta) y «agendaSemana» (grooming, sprint planning, reuniones con stakeholders). Decide tú qué es lo importante: si hace falta refinar más, hacer discovery, preparar el grooming o medir algo lanzado. Sin listas, en un párrafo.
+B. «flow»: las acciones de producto de hoy en orden, cada una con su porqué. Usa las de «accionesFlujo» con su misma clave; puedes reescribir el porqué, quitar las que no toquen hoy y añadir como mucho dos tuyas (clave «ai:…»). Ten en cuenta lo que has aprendido de sus correcciones.
+Después, el día:
+Los elementos de tipo «promise» son encargos: algo que otra persona le ha pedido. Llámalos siempre «encargos».
 Tienes una lista de elementos ya puntuados por una fórmula (compromiso, urgencia con margen de preparación, peso del área) y la agenda.
 Tu trabajo:
 1. Elegir las 3 cosas de hoy. Parte del orden de la puntuación, pero ajústalo con las reglas de «Mi flujo» y la agenda (huecos libres, días cargados). Explica el porqué en pocas palabras.
 2. Para cada reunión de hoy y de mañana, una checklist corta (2-4 puntos) de qué preparar antes. Usa search_notes y list_items para encontrar contexto relacionado con el título o los asistentes. Si no hay nada que preparar, deja la lista vacía.
-3. Proponer qué puede soltar (aplazar o delegar). Nunca promesas a otras personas.
+3. Proponer qué puede soltar (aplazar o delegar). Nunca encargos de otras personas.
 4. Indicar qué reglas de «Mi flujo» han influido.
 En «nuevoPorConfirmar» está lo recién detectado en notas y herramientas (Jira, correo…) que el usuario aún no ha confirmado. No lo pongas en las 3 cosas de hoy, pero si algo es importante o urgente, menciónalo en el resumen para que lo revise.
 Usa solo ids que aparezcan en los datos.`
@@ -94,7 +120,10 @@ export async function generateBrief(useAI: boolean): Promise<Brief> {
   const tomorrow = dayRange(addDays(day, 1))
   const tomorrowEvents = db.listEvents(tomorrow.from, tomorrow.to).filter((e) => !events.some((x) => x.id === e.id))
   const upcoming = [...events, ...tomorrowEvents]
-  const base = fallbackBrief(day, ranked, events, upcoming)
+  const week = weekEvents(day)
+  const snap = getSnapshot()
+  const signals = flowSignals(snap, week, new Date())
+  const base = fallbackBrief(day, ranked, events, upcoming, signals, week)
   if (!useAI) {
     const kept = keepChecks(db.getBrief(day), base)
     db.saveBrief(kept)
@@ -108,6 +137,11 @@ export async function generateBrief(useAI: boolean): Promise<Brief> {
     })),
     agendaHoy: events.map((e) => ({ id: e.id, titulo: e.title, inicio: e.start, fin: e.end, asistentes: e.attendees, notas: e.description })),
     agendaManana: tomorrowEvents.map((e) => ({ id: e.id, titulo: e.title, inicio: e.start, fin: e.end, asistentes: e.attendees, notas: e.description })),
+    jira: snap
+      ? buildBoard(snap, new Date()).map((c) => ({ paso: c.label, iniciativas: c.cards.map((x) => `${x.key} ${x.title}${x.quarter ? ` (${x.quarter})` : ''}${x.warnings.length ? ` — ${x.warnings.map((w) => w.text).join(', ')}` : ''}`) }))
+      : 'Sin leer todavía',
+    accionesFlujo: signals.map((f) => ({ clave: f.key, titulo: f.title, porque: f.why })),
+    agendaSemana: week.filter((e) => !e.allDay).map((e) => ({ titulo: e.title, inicio: e.start })),
     // Lo detectado en notas y herramientas que el usuario aún no ha confirmado.
     nuevoPorConfirmar: db.listItems({ status: ['proposed'] }).slice(0, 15).map((i) => ({
       tipo: i.kind, titulo: i.title, persona: i.person, vence: i.dueDate, origen: i.sourceType
@@ -138,7 +172,9 @@ export async function generateBrief(useAI: boolean): Promise<Brief> {
       .filter((e) => !e.allDay)
       .map((e) => ({ eventId: e.id, title: e.title, start: e.start, checklist: out.prepare.find((p) => p.eventId === e.id)?.checklist ?? [] })),
     letGo: out.letGo.filter((l) => ids.has(l.itemId) && db.getItem(l.itemId)?.kind !== 'promise'),
-    rulesApplied: out.rulesApplied
+    rulesApplied: out.rulesApplied,
+    weekly: out.weekly || base.weekly,
+    flow: out.flow?.length || !signals.length ? out.flow : base.flow
   }
   const kept = keepChecks(db.getBrief(day), brief)
   db.saveBrief(kept)

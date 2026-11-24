@@ -17,10 +17,10 @@ export function scoreItem(item: Item, today: string, areas: Area[]): ScoredItem 
     case 'promise':
       if (item.person) {
         score += 30
-        reasons.push(`Se lo prometiste a ${item.person}`)
+        reasons.push(`Encargo de ${item.person}`)
       } else {
         score += 20
-        reasons.push('Es una promesa')
+        reasons.push('Es un encargo')
       }
       break
     case 'deadline':

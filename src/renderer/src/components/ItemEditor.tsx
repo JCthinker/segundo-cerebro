@@ -66,7 +66,7 @@ export function ItemEditor({ item, defaults, onClose }: { item: Item | null; def
               <option value="decision">Decisión</option>
             </select>
           </Field>
-          <Field label="Persona" hint={f.kind === 'promise' ? 'A quién se lo prometiste' : undefined}>
+          <Field label="Persona" hint={f.kind === 'promise' ? 'Quién te lo pidió' : undefined}>
             <input className={inputCls} value={f.person ?? ''} onChange={(e) => set('person', e.target.value || null)} placeholder="Ana" />
           </Field>
           <Field label="Fecha límite">

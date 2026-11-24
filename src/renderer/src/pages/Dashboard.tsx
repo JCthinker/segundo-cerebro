@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { AiStatus, Brief, CalendarEvent, Item, ScoredItem, TodayView } from '@shared/types'
+import type { AiStatus, Brief, CalendarEvent, FlowItem, Item, ScoredItem, TodayView } from '@shared/types'
 import { formatDayLong, parseDay } from '@shared/dates'
 import { isDone, planDays, todayIds, type DayPlan, type PlanEntry } from '@shared/plan'
 import { call, useAction, useData } from '../api'
@@ -13,7 +13,7 @@ const weekday = (day: string) => parseDay(day).toLocaleDateString('es-ES', { wee
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
 export function Dashboard({ ai, shortcut }: { ai: AiStatus | null; shortcut: string | null }) {
-  const { editItem } = useNav()
+  const { editItem, go } = useNav()
   const { data, error } = useData<TodayView>('today.get', [], ['items', 'events', 'brief', 'areas', 'workflow'])
   const gen = useAction((useAI: boolean) => call<Brief>('brief.generate', useAI))
 
@@ -66,9 +66,12 @@ export function Dashboard({ ai, shortcut }: { ai: AiStatus | null; shortcut: str
       </div>
       <ErrorNote>{gen.error}</ErrorNote>
 
+      {brief?.weekly ? <Weekly text={brief.weekly} answered={data.weeklyAnswered} /> : null}
       {brief ? <p className="font-voice mb-4 text-[16px] leading-relaxed text-muted">{brief.summary}</p> : null}
 
       <QuickBox ai={ai} shortcut={shortcut} />
+
+      <FlowSection items={data.flow} />
 
       {overdue.length ? (
         <>
@@ -81,7 +84,17 @@ export function Dashboard({ ai, shortcut }: { ai: AiStatus | null; shortcut: str
         </>
       ) : null}
 
-      <SectionLabel>Hoy</SectionLabel>
+      <SectionLabel
+        right={
+          data.encargos ? (
+            <button className="text-[12.5px] text-muted hover:text-ink hover:underline" onClick={() => go('encargos')}>
+              {plural(data.encargos, 'encargo', 'encargos')} en total →
+            </button>
+          ) : null
+        }
+      >
+        Hoy · tareas y encargos
+      </SectionLabel>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
         <Card className="px-4 lg:col-span-3">
           {top.length || todayRest.length || undated.length ? (
@@ -361,5 +374,95 @@ function Meeting({ e, checklist }: { e: CalendarEvent; checklist?: { items: stri
         </ul>
       ) : null}
     </div>
+  )
+}
+
+/** «Lo que toca esta semana»: la lectura de Claude, que puedes aceptar o corregir. */
+function Weekly({ text, answered }: { text: string; answered: boolean }) {
+  const [why, setWhy] = useState<string | null>(null)
+  const react = useAction((agree: boolean, reason?: string) => call('brief.react', agree, reason))
+  return (
+    <Card className="mb-4 border-clay/30 bg-clay/5 px-5 py-4">
+      <div className="mb-1 flex items-center gap-1.5 text-[11.5px] font-medium tracking-wide text-clay uppercase">
+        <Icon name="sparkles" className="h-3.5 w-3.5" /> Lo que toca esta semana
+      </div>
+      <p className="font-voice text-[16px] leading-relaxed">{text}</p>
+      {answered ? null : why === null ? (
+        <div className="mt-3 flex gap-2">
+          <Button size="sm" variant="ghost" busy={react.busy} onClick={() => react.run(true)}>
+            <Icon name="check" /> De acuerdo
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setWhy('')}>
+            No lo veo así
+          </Button>
+        </div>
+      ) : (
+        <div className="mt-3 flex gap-2">
+          <input
+            autoFocus
+            className={inputCls}
+            value={why}
+            onChange={(e) => setWhy(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && why.trim() && react.run(false, why)}
+            placeholder="¿Qué es lo importante esta semana? Claude lo tendrá en cuenta"
+          />
+          <Button size="sm" variant="primary" busy={react.busy} disabled={!why.trim()} onClick={() => react.run(false, why)}>
+            Enviar
+          </Button>
+        </div>
+      )}
+      <ErrorNote>{react.error}</ErrorNote>
+    </Card>
+  )
+}
+
+/** Flujo de producto · para hoy: lo que hay que mover en Jira, con su porqué. */
+function FlowSection({ items }: { items: FlowItem[] }) {
+  const { talk } = useNav()
+  const [all, setAll] = useState(false)
+  if (!items.length) return null
+  const shown = all ? items : items.slice(0, 5)
+  const hide = (f: FlowItem, how: 'later' | 'notNeeded' | 'done') => call('flow.hide', f.key, how, f.title)
+  return (
+    <>
+      <SectionLabel>Flujo de producto · para hoy</SectionLabel>
+      <Card className="px-4">
+        {shown.map((f, i) => (
+          <div key={f.key} className="group flex items-start gap-3 border-b border-line py-3 last:border-0">
+            <span className="mt-0.5 w-5 shrink-0 text-[13px] font-semibold text-clay tabular-nums">{i + 1}</span>
+            <div className="min-w-0 flex-1">
+              <div className="font-medium">
+                {f.title}
+                {f.ref ? (
+                  <button className="ml-2 text-[12px] font-normal text-faint hover:text-ink hover:underline" onClick={() => f.url && call('shell.open', f.url)}>
+                    {f.ref}
+                  </button>
+                ) : null}
+              </div>
+              <p className="mt-0.5 text-[13px] leading-snug text-muted">{f.why}</p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                <Button size="sm" variant="claude" onClick={() => talk(`Ayúdame con esto del flujo de producto: «${f.title}»${f.ref ? ` (${f.ref})` : ''}. ${f.why}`)}>
+                  <Icon name="sparkles" /> Hacer con Claude
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => hide(f, 'done')}>
+                  <Icon name="check" /> Hecho
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => hide(f, 'later')}>
+                  Ahora no
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => hide(f, 'notNeeded')} title="Claude lo apunta para no volver a proponerlo así">
+                  No hace falta
+                </Button>
+              </div>
+            </div>
+          </div>
+        ))}
+        {items.length > 5 ? (
+          <button className="w-full py-2.5 text-[12.5px] text-muted hover:text-ink" onClick={() => setAll(!all)}>
+            {all ? 'Ver menos' : `Ver ${items.length - 5} más`}
+          </button>
+        ) : null}
+      </Card>
+    </>
   )
 }

@@ -65,9 +65,9 @@ export const TOOL_ITEMS_SCHEMA = (() => {
 })()
 
 const EXTRACT_ROLE = `Eres el extractor del «segundo cerebro» del usuario. Lees un texto (una nota, un correo, un acta, un mensaje…) y detectas:
-- promise: algo que el usuario se comprometió a hacer para otra persona («te lo paso el viernes»).
+- promise (un «encargo»): algo que otra persona le pide al usuario o que él se comprometió a hacer para otra persona («¿me pasas el informe?», «te lo paso el viernes»). Pon siempre en person quién lo pidió. Los encargos van a su lista, no a Jira.
 - deadline: una entrega o fecha límite.
-- task: algo que el usuario tiene que hacer, sin otra persona esperando.
+- task: algo que el usuario tiene que hacer, sin otra persona esperando. Si es trabajo técnico para el equipo (una tarea para FP), no es una tarea suya: como mucho «Crear en FP la tarea …».
 - decision: una decisión tomada que conviene recordar.
 Reglas:
 - Solo lo que esté en el texto. Si dudas, no lo incluyas.

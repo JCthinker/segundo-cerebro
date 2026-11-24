@@ -100,6 +100,19 @@ export interface Brief {
   prepare: { eventId: string; title: string; start: string; checklist: string[]; done?: string[] }[]
   letGo: { itemId: string; suggestion: string }[]
   rulesApplied: string[]
+  /** Lo que toca esta semana, en un párrafo. */
+  weekly?: string
+  /** Acciones del flujo de producto en el orden que propone Claude. */
+  flow?: { key: string; title: string; why: string }[]
+}
+
+/** Una acción del flujo de producto tal como se ve en Hoy. */
+export interface FlowItem {
+  key: string
+  title: string
+  why: string
+  ref: string | null
+  url: string | null
 }
 
 export interface ApprovalRequest {
@@ -183,10 +196,16 @@ export interface TodayView {
   proposedCount: number
   /** Lo detectado que espera tu confirmación. */
   proposed: Item[]
+  /** Flujo de producto · para hoy (sin lo que has ocultado). */
+  flow: FlowItem[]
+  /** Encargos activos (lo que te han pedido). */
+  encargos: number
+  /** Si ya respondiste a «lo que toca esta semana» de este brief. */
+  weeklyAnswered: boolean
 }
 
 export const KIND_LABEL: Record<ItemKind, string> = {
-  promise: 'Promesa',
+  promise: 'Encargo',
   deadline: 'Entrega',
   task: 'Tarea',
   decision: 'Decisión'

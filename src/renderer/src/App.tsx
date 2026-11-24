@@ -15,10 +15,12 @@ import { Jira } from './pages/Jira'
 import { WORKFLOW_NOTE_ID } from './pages/Workflow'
 import { UsageMeter } from './components/UsageMeter'
 import { Sources } from './pages/Sources'
+import { Encargos } from './pages/Encargos'
 import { Settings } from './pages/Settings'
 
 const NAV: { page: Page; label: string; icon: Parameters<typeof Icon>[0]['name'] }[] = [
   { page: 'today', label: 'Dashboard', icon: 'sun' },
+  { page: 'encargos', label: 'Encargos', icon: 'hand' },
   { page: 'jira', label: 'Jira', icon: 'route' },
   { page: 'notes', label: 'Notas', icon: 'notes' },
   { page: 'history', label: 'Historial', icon: 'history' }
@@ -153,6 +155,7 @@ export function App() {
               </div>
             ) : null}
             {page === 'today' && <Dashboard ai={ai} shortcut={settings.shortcut} />}
+            {page === 'encargos' && <Encargos />}
             {page === 'jira' && <Jira />}
             {page === 'notes' && <Notes ai={ai} />}
             {page === 'history' && <History />}

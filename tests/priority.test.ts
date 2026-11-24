@@ -34,7 +34,7 @@ describe('scoreItem', () => {
     const p = scoreItem(item({ kind: 'promise', person: 'Ana', dueDate: '2026-11-25' }), TODAY, areas)
     const t = scoreItem(item({ kind: 'task', dueDate: '2026-11-25' }), TODAY, areas)
     expect(p.score).toBeGreaterThan(t.score)
-    expect(p.reasons).toContain('Se lo prometiste a Ana')
+    expect(p.reasons).toContain('Encargo de Ana')
   })
 
   it('marca "vence mañana" y en riesgo para promesas', () => {
