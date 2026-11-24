@@ -191,8 +191,8 @@ export function ResolvePanel({ item, initialGoal, onClose }: { item: Item | null
   const placeholder =
     stage === 'plan'
       ? plan?.question
-        ? 'Contesta a Claude aquí y pulsa Intro: lo hará con tu respuesta…'
-        : 'Escribe «sí» para que lo haga, o dile qué cambiar…'
+        ? 'Contesta a Claude y pulsa Intro: se pone a trabajar con tu respuesta…'
+        : 'Pulsa Intro o «Hazlo» para que empiece. Si quieres algún matiz, escríbelo y lo tendrá en cuenta…'
       : stage === 'run'
         ? running
           ? 'Si quieres cambiar algo, escríbelo: Claude parará y te propondrá un plan nuevo…'
@@ -278,8 +278,8 @@ export function ResolvePanel({ item, initialGoal, onClose }: { item: Item | null
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault()
-              // Si Claude había preguntado algo, tu respuesta va directa a «Hazlo».
-              if (stage === 'plan' && plan?.question && hasText) void start.run()
+              // Con un plan delante, lo que escribas va con «Hazlo»: nunca vuelve a planear solo.
+              if (stage === 'plan' && plan) void start.run()
               else if (hasText || (stage === 'ask' && item)) void send.run()
             }
           }}
@@ -378,7 +378,7 @@ function PlanView({ plan, current }: { plan: ResolvePlan; current: boolean }) {
           : plan.steps.some((s) => s.kind === 'write' && s.effect === 'auto')
             ? 'Lo que dice «Lo hace solo» se hará directamente, porque así lo tienes en Mi flujo. '
             : 'No va a enviar ni cambiar nada en tus herramientas. '}
-        Si te parece bien, pulsa «Hazlo»; si no, dile abajo qué cambiar.
+        Pulsa «Hazlo» para que empiece. Lo que le escribas abajo lo tendrá en cuenta al hacerlo.
       </p>
     </div>
   )

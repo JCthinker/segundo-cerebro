@@ -106,7 +106,7 @@ export function startResolve(itemId: string | null, goal: string, mode: 'normal'
 
   const itemText = describeItem(itemId)
   const planText = plan?.steps.length
-    ? `\n\nPlan que el usuario ha visto y aprobado (síguelo; no hagas nada fuera de él):\n${plan.steps.map((st, i) => `${i + 1}. ${st.text}`).join('\n')}`
+    ? `\n\nPlan que el usuario ha visto y aprobado (síguelo; no hagas nada fuera de él, salvo lo que el usuario haya añadido o cambiado en sus mensajes, que manda sobre el plan):\n${plan.steps.map((st, i) => `${i + 1}. ${st.text}`).join('\n')}`
     : ''
 
   void (async () => {
