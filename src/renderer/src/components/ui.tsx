@@ -89,9 +89,16 @@ export function ErrorNote({ children }: { children: ReactNode }) {
   return <div className="mt-3 rounded-lg bg-danger-bg px-3 py-2 text-[13px] text-danger">{children}</div>
 }
 
-export function Modal({ children, onClose, width = 'max-w-xl' }: { children: ReactNode; onClose?: () => void; width?: string }) {
+export function Modal({ children, onClose, width = 'max-w-xl', full }: { children: ReactNode; onClose?: () => void; width?: string; full?: boolean }) {
+  if (full)
+    // Casi toda la ventana; «no-drag» para que la barra lateral no se trague los clics.
+    return (
+      <div className="no-drag fixed inset-0 z-40 flex justify-center bg-black/40 p-4 pt-8">
+        <div className="flex h-full w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-line bg-raised shadow-2xl">{children}</div>
+      </div>
+    )
   return (
-    <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/40 p-6 pt-[10vh]" onMouseDown={(e) => e.target === e.currentTarget && onClose?.()}>
+    <div className="no-drag fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/40 p-6 pt-[10vh]" onMouseDown={(e) => e.target === e.currentTarget && onClose?.()}>
       <div className={`w-full ${width} rounded-2xl border border-line bg-raised shadow-2xl`}>{children}</div>
     </div>
   )
