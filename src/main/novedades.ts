@@ -5,7 +5,7 @@ import * as db from './db'
 import { dataChanged } from './events'
 import { getSettings } from './settings'
 import { baseSystem } from './agent/context'
-import { agentEnv, runAgent } from './agent/client'
+import { agentEnv, runAgent, setupError } from './agent/client'
 import { connectorLabel, enabledConnectorNames } from './agent/connectors'
 import { isCalendarConnector } from './sources'
 import { getSnapshot } from './jira'
@@ -88,7 +88,7 @@ export function reviewNews(): Promise<number> {
 async function doReview(): Promise<number> {
   if (getSettings().aiMode === 'api-key') return 0
   const names = (await enabledConnectorNames(agentEnv())).filter((n) => !isCalendarConnector(n))
-  if (!names.length) throw new Error('No hay herramientas conectadas para leer. Actívalas en Ajustes → Entradas → De tu cuenta de Claude.')
+  if (!names.length) throw setupError('No hay herramientas conectadas para leer. Actívalas en Ajustes → Entradas → De tu cuenta de Claude.')
   const seen = read<string[]>(SEEN, [])
   const items = db.listItems({ status: ['active'] }).slice(0, 80)
   const snap = getSnapshot()

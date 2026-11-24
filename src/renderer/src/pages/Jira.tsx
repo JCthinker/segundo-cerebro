@@ -1,5 +1,7 @@
-import { useMemo, useState } from 'react'
-import { buildBoard, matches, readAgo, taskReady, type BoardCard, type JiraSnapshot, type JiraTask, type Warning } from '@shared/jira'
+import { useEffect, useMemo, useState } from 'react'
+import { setScreenDetail } from '../screen'
+import { buildBoard, matches, readAgo, taskReady, type BoardCard, type JiraPrefs, type JiraSnapshot, type JiraTask, type Warning } from '@shared/jira'
+import { JiraCustomize } from '../components/JiraCustomize'
 import { call, useAction, useData } from '../api'
 import { Button, Card, Empty, ErrorNote, Icon, inputBase, PageHeader, Pill, Spinner } from '../components/ui'
 import { useNav } from '../nav'
@@ -12,6 +14,7 @@ interface JiraView {
   syncing: boolean
   error: string | null
   projects: { road: string; fp: string }
+  prefs: JiraPrefs
 }
 
 type Tab = 'road' | 'sprint' | 'measure' | 'fp' | 'epics'
@@ -26,13 +29,17 @@ function Warn({ w }: { w: Warning }) {
 
 export function Jira() {
   const { data, error } = useData<JiraView>('jira.get', [], ['jira'])
-  const { go } = useNav()
+  const { go, openInitiative } = useNav()
   const sync = useAction(() => call('jira.sync'))
   const [tab, setTab] = useState<Tab>('road')
   const [q, setQ] = useState('')
   const [onlyWarn, setOnlyWarn] = useState(false)
   const [lowBacklog, setLowBacklog] = useState(false)
+  const [customizing, setCustomizing] = useState(false)
 
+  useEffect(() => {
+    setScreenDetail(`pestaña ${({ road: 'Iniciativas ROAD (tablero por pasos)', sprint: 'Sprint y épicas', measure: 'Mediciones', fp: 'Tareas FP', epics: 'Épicas' } as Record<Tab, string>)[tab]}`)
+  }, [tab])
   const snap = data?.snapshot ?? null
   const board = useMemo(() => (snap ? buildBoard(snap, new Date()) : []), [snap])
 
@@ -49,20 +56,27 @@ export function Jira() {
           : `Cada iniciativa de ${data.projects.road} en el paso en que está, con lo que le falta.`
       }
       right={
-        data.connector ? (
-          <Button onClick={() => void sync.run()} busy={busy}>
-            {!busy ? <Icon name="refresh" /> : null}
-            {busy ? 'Leyendo Jira…' : 'Actualizar'}
+        <div className="flex gap-1.5">
+          <Button variant="ghost" onClick={() => setCustomizing(true)}>
+            <Icon name="settings" /> Personalizar
           </Button>
-        ) : null
+          {data.connector ? (
+            <Button onClick={() => void sync.run()} busy={busy}>
+              {!busy ? <Icon name="refresh" /> : null}
+              {busy ? 'Leyendo Jira…' : 'Actualizar'}
+            </Button>
+          ) : null}
+        </div>
       }
     />
   )
+  const customize = customizing ? <JiraCustomize prefs={data.prefs} snap={snap} onClose={() => setCustomizing(false)} /> : null
 
   if (!data.connector && !snap)
     return (
       <div>
         {header}
+        {customize}
         <Empty
           title="Falta la conexión de Jira"
           action={
@@ -71,7 +85,7 @@ export function Jira() {
             </Button>
           }
         >
-          La app lee Jira a través de tu cuenta de Claude. Conecta Jira (Atlassian) en claude.ai → Ajustes → Conectores y actívalo aquí en Ajustes → Entradas → De tu cuenta de Claude.
+          La app lee Jira a través de tu cuenta de Claude, y ahora mismo no tiene Jira conectado. Entra en claude.ai → Ajustes → Conectores, añade Atlassian (Jira) e inicia sesión. Después vuelve aquí: la app lo detecta sola.
         </Empty>
       </div>
     )
@@ -80,6 +94,7 @@ export function Jira() {
     return (
       <div>
         {header}
+        {customize}
         <ErrorNote>{sync.error ?? (busy ? null : data.error)}</ErrorNote>
         {busy ? (
           <Card className="flex items-center gap-3 px-5 py-6 text-[13.5px] text-muted">
@@ -95,6 +110,7 @@ export function Jira() {
 
   const cardShown = (c: BoardCard) => matches(`${c.key} ${c.title}`, q) && (!onlyWarn || c.warnings.length > 0)
   const columns = board
+    .filter((col) => !data.prefs.hidden.includes(col.id))
     .filter((col) => lowBacklog || (col.id !== 'backlog3' && col.id !== 'backlog2'))
     .map((col) => ({ ...col, cards: col.cards.filter(cardShown) }))
   const hiddenLow = board.filter((c) => c.id === 'backlog3' || c.id === 'backlog2').reduce((n, c) => n + c.cards.length, 0)
@@ -103,6 +119,7 @@ export function Jira() {
   return (
     <div>
       {header}
+        {customize}
       <ErrorNote>{sync.error ?? data.error}</ErrorNote>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -155,7 +172,7 @@ export function Jira() {
                   <span className="text-faint">{col.cards.length}</span>
                 </div>
                 {col.cards.map((c) => (
-                  <button key={c.key} onClick={() => open(c.url)} className="rounded-xl border border-line bg-raised p-3 text-left hover:border-line-strong">
+                  <button key={c.key} onClick={() => openInitiative(c.key)} className="rounded-xl border border-line bg-raised p-3 text-left hover:border-line-strong">
                     <div className="flex items-center justify-between gap-2 text-[11.5px] text-faint">
                       <span>{c.key}</span>
                       {c.quarter ? <span className={c.quarterRank === 0 ? 'font-medium text-ink' : ''}>{c.quarter}</span> : null}

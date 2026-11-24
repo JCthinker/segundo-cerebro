@@ -2,7 +2,7 @@
  * Sprint y épicas: para cada iniciativa lista para desarrollo, si sus tareas FP están preparadas
  * y si su épica tiene exactamente las mismas tareas. Sin IA.
  */
-import { quarterOf, stageOf, taskReady, type JiraSnapshot, type JiraTask } from './jira'
+import { quarterOf, stageOf, taskReady, type JiraInitiative, type JiraSnapshot, type JiraTask } from './jira'
 
 export interface SprintRow {
   key: string
@@ -23,43 +23,46 @@ const up = (s: string) => s.toUpperCase()
 
 export function sprintRows(snap: JiraSnapshot | null, now: Date): SprintRow[] {
   if (!snap) return []
-  const q = quarterOf(now).toLowerCase().replace(/\s+/g, '')
   return snap.initiatives
     .filter((i) => stageOf(i.status) === 'dev' || stageOf(i.status) === 'wip')
-    .map((i) => {
-      const tasks = i.taskKeys.flatMap((k) => {
-        const t = snap.tasks.find((x) => up(x.key) === up(k))
-        return t ? [{ ...t, ready: taskReady(t) }] : []
-      })
-      const unknownTasks = i.taskKeys.filter((k) => !snap.tasks.some((x) => up(x.key) === up(k)))
-      const e = i.epicKey ? snap.epics.find((x) => up(x.key) === up(i.epicKey!)) : snap.epics.find((x) => x.roadKey && up(x.roadKey) === up(i.key))
-      const mine = new Set(i.taskKeys.map(up))
-      const inEpic = new Set((e?.taskKeys ?? []).map(up))
-      const epic = e ? { key: e.key, url: e.url, missing: [...mine].filter((k) => !inEpic.has(k)), extra: [...inEpic].filter((k) => !mine.has(k)) } : null
-      const problems: string[] = []
-      if (!i.taskKeys.length) problems.push('No tiene tareas FP')
-      const notReady = tasks.filter((t) => !t.ready).length
-      if (notReady) problems.push(`${notReady} FP sin describir o estimar`)
-      if (!epic) problems.push('No tiene épica')
-      else {
-        if (epic.missing.length) problems.push(`Faltan en la épica: ${epic.missing.join(', ')}`)
-        if (epic.extra.length) problems.push(`Sobran en la épica: ${epic.extra.join(', ')}`)
-      }
-      return {
-        key: i.key,
-        title: i.title,
-        url: i.url,
-        status: i.status,
-        quarter: i.quarter,
-        currentQuarter: !!i.quarter && i.quarter.toLowerCase().replace(/\s+/g, '') === q,
-        tasks,
-        unknownTasks,
-        epic,
-        ready: !problems.length,
-        problems
-      }
-    })
+    .map((i) => sprintRowFor(i, snap, now))
     .sort((a, b) => Number(b.currentQuarter) - Number(a.currentQuarter) || Number(a.ready) - Number(b.ready) || a.key.localeCompare(b.key))
+}
+
+/** Tareas FP y épica de una iniciativa: qué está listo y qué no cuadra. */
+export function sprintRowFor(i: JiraInitiative, snap: JiraSnapshot, now: Date): SprintRow {
+  const q = quarterOf(now).toLowerCase().replace(/\s+/g, '')
+  const tasks = i.taskKeys.flatMap((k) => {
+    const t = snap.tasks.find((x) => up(x.key) === up(k))
+    return t ? [{ ...t, ready: taskReady(t) }] : []
+  })
+  const unknownTasks = i.taskKeys.filter((k) => !snap.tasks.some((x) => up(x.key) === up(k)))
+  const e = i.epicKey ? snap.epics.find((x) => up(x.key) === up(i.epicKey!)) : snap.epics.find((x) => x.roadKey && up(x.roadKey) === up(i.key))
+  const mine = new Set(i.taskKeys.map(up))
+  const inEpic = new Set((e?.taskKeys ?? []).map(up))
+  const epic = e ? { key: e.key, url: e.url, missing: [...mine].filter((k) => !inEpic.has(k)), extra: [...inEpic].filter((k) => !mine.has(k)) } : null
+  const problems: string[] = []
+  if (!i.taskKeys.length) problems.push('No tiene tareas FP')
+  const notReady = tasks.filter((t) => !t.ready).length
+  if (notReady) problems.push(`${notReady} FP sin describir o estimar`)
+  if (!epic) problems.push('No tiene épica')
+  else {
+    if (epic.missing.length) problems.push(`Faltan en la épica: ${epic.missing.join(', ')}`)
+    if (epic.extra.length) problems.push(`Sobran en la épica: ${epic.extra.join(', ')}`)
+  }
+  return {
+    key: i.key,
+    title: i.title,
+    url: i.url,
+    status: i.status,
+    quarter: i.quarter,
+    currentQuarter: !!i.quarter && i.quarter.toLowerCase().replace(/\s+/g, '') === q,
+    tasks,
+    unknownTasks,
+    epic,
+    ready: !problems.length,
+    problems
+  }
 }
 
 /** Objetivo de sprint propuesto: las iniciativas del trimestre que ya están listas. */

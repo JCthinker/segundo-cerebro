@@ -46,7 +46,7 @@ export function measureRows(
     .filter((i) => stageOf(i.status) === 'done' && (!i.updated || i.updated.slice(0, 10) >= since))
     .map((i) => {
       const doneOn = i.updated ? i.updated.slice(0, 10) : null
-      const plan = plans[i.key] ?? { date: addDaysIso(doneOn ?? today, 14), kpi: null, why: 'Dos semanas después de terminar, hasta que Claude lea el KPI.', byAI: false }
+      const plan = plans[i.key] ?? { date: addDaysIso(doneOn ?? today, 14), kpi: i.kpi ?? null, why: 'Dos semanas después de terminar, hasta que Claude lea el KPI.', byAI: false }
       const result = results[i.key] ?? null
       return { key: i.key, title: i.title, url: i.url, doneOn, plan, result, due: !result && plan.date <= today }
     })

@@ -16,6 +16,18 @@ import { WORKFLOW_NOTE_ID } from './pages/Workflow'
 import { UsageMeter } from './components/UsageMeter'
 import { Sources } from './pages/Sources'
 import { Encargos } from './pages/Encargos'
+import { InitiativeSheet } from './components/InitiativeSheet'
+import { setScreenPage } from './screen'
+
+const SCREEN_LABEL: Record<string, string> = {
+  today: 'Dashboard (Hoy)',
+  encargos: 'Encargos',
+  jira: 'Jira',
+  notes: 'Notas',
+  history: 'Historial',
+  settings: 'Ajustes',
+  sources: 'Ajustes · Entradas'
+}
 import { Settings } from './pages/Settings'
 
 const NAV: { page: Page; label: string; icon: Parameters<typeof Icon>[0]['name'] }[] = [
@@ -44,6 +56,11 @@ export function App() {
     setChat({ item, goal, key: Date.now() })
   }
   const [editing, setEditing] = useState<{ item: Item | null; defaults?: Partial<Item> } | null>(null)
+  const [sheet, setSheet] = useState<string | null>(null)
+  // Para que Claude sepa qué estás mirando cuando le hablas.
+  useEffect(() => {
+    setScreenPage(SCREEN_LABEL[page] ?? page)
+  }, [page, param])
   const [ai, setAi] = useState<AiStatus | null>(null)
   const { data: settings, reload: reloadSettings } = useData<S & { shortcut: string | null }>('settings.get', [], ['settings'])
   const { data: today } = useData<{ proposedCount: number }>('today.get', [], ['items'])
@@ -84,7 +101,8 @@ export function App() {
       if (!chat) setChat({ item: null, key: Date.now() })
       setIncoming({ text, n: Date.now() })
     },
-    editItem: (item: Item | null, defaults?: Partial<Item>) => setEditing({ item, defaults })
+    editItem: (item: Item | null, defaults?: Partial<Item>) => setEditing({ item, defaults }),
+    openInitiative: (key: string) => setSheet(key)
   }
 
   return (
@@ -177,6 +195,7 @@ export function App() {
       </div>
 
 
+      {sheet ? <InitiativeSheet jiraKey={sheet} onClose={() => setSheet(null)} /> : null}
       {editing ? <ItemEditor item={editing.item} defaults={editing.defaults} onClose={() => setEditing(null)} /> : null}
       <ApprovalHost />
     </NavContext.Provider>

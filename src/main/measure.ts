@@ -4,7 +4,7 @@ import { isReadOnlyTool } from '@shared/permissions'
 import * as db from './db'
 import { dataChanged } from './events'
 import { baseSystem } from './agent/context'
-import { runAgent } from './agent/client'
+import { runAgent, setupError } from './agent/client'
 import { getSnapshot, jiraConnector } from './jira'
 
 /**
@@ -68,7 +68,7 @@ async function doPlan(): Promise<number> {
   const todo = currentMeasures().filter((r) => !r.result && !plans[r.key]?.byAI)
   if (!todo.length) return 0
   const connector = await jiraConnector()
-  if (!connector) throw new Error('No hay conexión de Jira para leer los KPI.')
+  if (!connector) throw setupError('Tu cuenta de Claude no tiene Jira conectado. Conéctalo en claude.ai → Ajustes → Conectores → Atlassian (Jira) y vuelve a intentarlo.')
   const r = await runAgent({
     system: baseSystem(`Para cada iniciativa terminada de Jira ROAD, lee su descripción y busca el KPI que se quería mover. Decide cuándo medir: lo que se ve en días (uso, clics, errores) a 1-2 semanas; conversión o ventas, a 3-4 semanas; retención o recurrencia, a 6-12 semanas. Cuenta desde que terminó. Usa solo herramientas de lectura.`),
     prompt: JSON.stringify(todo.map((t) => ({ clave: t.key, titulo: t.title, terminada: t.doneOn })), null, 2),

@@ -16,6 +16,7 @@ import { makeGate } from './permissions-gate'
  */
 
 const ROLE = `Eres el asistente personal del usuario dentro de su app «Segundo Cerebro». Trabajas como en la app de Claude: conversación natural y haces el trabajo directamente.
+- Sus mensajes llevan al final «[Pantalla que tiene abierta…]»: úsalo para entender a qué se refiere con «esto», «esta iniciativa» o «esta nota». No lo menciones si no hace falta.
 - No presentes planes para que los apruebe ni pidas permiso antes de empezar: ponte a ello. Si de verdad falta un dato imprescindible, pregúntalo una sola vez y en una frase.
 - Tienes acceso a su ordenador (archivos y órdenes de terminal), a internet, a sus skills y a sus herramientas conectadas. Leer y buscar es libre.
 - La app le pide OK automáticamente para lo que escribe, envía o cambia algo, según sus permisos de Mi flujo. Tú no le preguntes además en el chat: usa la herramienta y la app se encarga.
@@ -66,24 +67,27 @@ function setStatus(runId: string, status: ActionRun['status']): void {
 }
 
 /** Empieza una conversación nueva. Devuelve enseguida; Claude contesta por «run-updated». */
-export function chatStart(itemId: string | null, text: string, drafts: boolean): ActionRun {
+/** Lo que tiene en pantalla, para que «esto» o «esta iniciativa» se entiendan. No se guarda en el historial. */
+const screenNote = (where?: string) => (where?.trim() ? `\n\n[Pantalla que tiene abierta en la app: ${where.trim()}]` : '')
+
+export function chatStart(itemId: string | null, text: string, drafts: boolean, where?: string): ActionRun {
   const item = itemId ? db.getItem(itemId) : null
   const said = text.trim()
   const run = db.createRun(itemId, item ? item.title : requestTitle(said), drafts ? 'drafts' : 'normal')
   if (said) log(run.id, { at: new Date().toISOString(), type: 'user', text: said })
   const first = [describeItem(itemId), said ? `Lo que te pide: ${said}` : 'Resuélvelo.'].filter(Boolean).join('\n\n')
-  open(run.id, itemId, first + (drafts ? DRAFTS_NOTE : ''), drafts)
+  open(run.id, itemId, first + screenNote(where) + (drafts ? DRAFTS_NOTE : ''), drafts)
   dataChanged('runs')
   return db.getRun(run.id)!
 }
 
 /** Le escribe algo más. Si la conversación ya no estaba abierta (p. ej. tras reiniciar), la retoma con lo anterior. */
-export function chatSend(runId: string, text: string, drafts: boolean): void {
+export function chatSend(runId: string, text: string, drafts: boolean, where?: string): void {
   const said = text.trim()
   const run = db.getRun(runId)
   if (!said || !run) return
   log(runId, { at: new Date().toISOString(), type: 'user', text: said })
-  const msg = said + (drafts ? DRAFTS_NOTE : '')
+  const msg = said + screenNote(where) + (drafts ? DRAFTS_NOTE : '')
   const s = sessions.get(runId)
   if (!s) {
     const before = run.log

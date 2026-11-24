@@ -478,7 +478,7 @@ function Weekly({ text, answered }: { text: string; answered: boolean }) {
 
 /** Flujo de producto · para hoy: lo que hay que mover en Jira, con su porqué. */
 function FlowSection({ items }: { items: FlowItem[] }) {
-  const { talk } = useNav()
+  const { talk, openInitiative } = useNav()
   const [all, setAll] = useState(false)
   if (!items.length) return null
   const shown = all ? items : items.slice(0, 5)
@@ -494,7 +494,7 @@ function FlowSection({ items }: { items: FlowItem[] }) {
               <div className="font-medium">
                 {f.title}
                 {f.ref ? (
-                  <button className="ml-2 text-[12px] font-normal text-faint hover:text-ink hover:underline" onClick={() => f.url && call('shell.open', f.url)}>
+                  <button className="ml-2 text-[12px] font-normal text-faint hover:text-ink hover:underline" onClick={() => (/^[A-Z]+-\d+$/.test(f.ref ?? '') ? openInitiative(f.ref!) : f.url && call('shell.open', f.url))}>
                     {f.ref}
                   </button>
                 ) : null}

@@ -2,7 +2,7 @@ import { meetingNoteTitle } from '@shared/meetings'
 import type { CalendarEvent } from '@shared/types'
 import * as db from './db'
 import { baseSystem } from './agent/context'
-import { runAgent } from './agent/client'
+import { runAgent, setupError } from './agent/client'
 import { getSnapshot } from './jira'
 
 /**
@@ -87,7 +87,7 @@ Relaciona cada cosa con su iniciativa de ROAD cuando esté clara, usando solo la
 export async function reviewNote(noteId: string): Promise<ReviewEntry[]> {
   const note = db.getNote(noteId)
   if (!note) throw new Error('No encuentro la nota.')
-  if (note.plain.trim().length < 10) throw new Error('La nota está casi vacía.')
+  if (note.plain.trim().length < 10) throw setupError('La nota está casi vacía.')
   const snap = getSnapshot()
   const iniciativas = snap?.initiatives.map((i) => `${i.key} ${i.title} (${i.status})`) ?? []
   const r = await runAgent({

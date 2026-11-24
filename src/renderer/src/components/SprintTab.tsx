@@ -12,7 +12,7 @@ const open = (url: string | null) => {
 
 /** Preparar la sprint planning: tareas FP listas y épicas iguales a su iniciativa. */
 export function SprintTab({ snap }: { snap: JiraSnapshot }) {
-  const { talk } = useNav()
+  const { talk, openInitiative } = useNav()
   const { data: today } = useData<TodayView>('today.get', [], ['events'])
   const rows = sprintRows(snap, new Date())
   const planning = today ? nextMeeting(today.events, /sprint\s*planning|planning|planificaci/i, new Date()) : null
@@ -34,7 +34,7 @@ export function SprintTab({ snap }: { snap: JiraSnapshot }) {
         <Card key={r.key} className="mb-3 px-4 py-3">
           <div className="flex items-start gap-3">
             <div className="min-w-0 flex-1">
-              <button className="text-left hover:underline" onClick={() => open(r.url)}>
+              <button className="text-left hover:underline" onClick={() => openInitiative(r.key)}>
                 <span className="mr-2 text-[12px] text-faint">{r.key}</span>
                 <span className="font-medium">{r.title}</span>
               </button>

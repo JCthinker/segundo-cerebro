@@ -32,7 +32,7 @@ export function MeasureTab() {
 }
 
 function MeasureCard({ r }: { r: MeasureRow }) {
-  const { talk } = useNav()
+  const { talk, openInitiative } = useNav()
   const [writing, setWriting] = useState(false)
   const [text, setText] = useState('')
   const record = useAction(async () => {
@@ -43,7 +43,7 @@ function MeasureCard({ r }: { r: MeasureRow }) {
     <Card className="mb-3 px-4 py-3">
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
-          <button className="text-left hover:underline" onClick={() => r.url && call('shell.open', r.url)}>
+          <button className="text-left hover:underline" onClick={() => openInitiative(r.key)}>
             <span className="mr-2 text-[12px] text-faint">{r.key}</span>
             <span className="font-medium">{r.title}</span>
           </button>

@@ -1,3 +1,4 @@
+import { describeScreen } from '../screen'
 import { useEffect, useRef, useState } from 'react'
 import type { ActionRun, ApprovalRequest, Item, RunLogEntry } from '@shared/types'
 import { serverLabel, serverOf, shortToolName } from '@shared/permissions'
@@ -150,8 +151,8 @@ export function ChatPanel({
     const said = (typed ?? text).trim()
     if (!said && !(item && !run)) return
     if (typed === undefined) setText('')
-    if (!run) setRun(await call<ActionRun>('chat.start', item?.id ?? null, said, draftsOnly))
-    else await call('chat.send', run.id, said, draftsOnly)
+    if (!run) setRun(await call<ActionRun>('chat.start', item?.id ?? null, said, draftsOnly, describeScreen()))
+    else await call('chat.send', run.id, said, draftsOnly, describeScreen())
     input.current?.focus()
   })
   // Lo que llega desde fuera se envía tal cual, como si lo hubieras escrito aquí.

@@ -57,6 +57,29 @@ export function hideFlow(key: string, how: 'later' | 'notNeeded' | 'done', title
   map[key] = until
   db.setSetting(HIDDEN, JSON.stringify(map))
   if (how === 'notNeeded') learn('flujo', `Dijo que no hacía falta: «${title}»`)
+  if (how === 'later') {
+    // Aplazar una vez es normal; si lo aplaza varias veces, Claude lo está proponiendo a destiempo.
+    const counts = readJson<Record<string, number>>(LATER, {})
+    counts[key] = (counts[key] ?? 0) + 1
+    db.setSetting(LATER, JSON.stringify(counts))
+    if (counts[key] === 2 || counts[key] === 4) learn('flujo', `Ha aplazado ${counts[key]} veces «${title}» con «Ahora no»: no es para estos días.`)
+  }
+  if (how === 'done') {
+    const counts = readJson<Record<string, number>>(LATER, {})
+    if (counts[key]) {
+      delete counts[key]
+      db.setSetting(LATER, JSON.stringify(counts))
+    }
+  }
+}
+
+const LATER = 'flow.laterCount'
+function readJson<T>(key: string, fallback: T): T {
+  try {
+    return JSON.parse(db.getSetting(key) ?? '') as T
+  } catch {
+    return fallback
+  }
 }
 
 /** Olvida una corrección (por su fecha), por si Claude aprendió algo que no era. */

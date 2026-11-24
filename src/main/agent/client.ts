@@ -324,7 +324,13 @@ export async function testAi(): Promise<AiStatus> {
   return lastStatus
 }
 
+/** Un error que no es de Claude (falta una conexión, una nota vacía…): no marca a Claude como caído. */
+export function setupError(message: string): Error {
+  return Object.assign(new Error(message), { notAi: true })
+}
+
 export function markAiFailure(e: unknown): void {
+  if (e && typeof e === 'object' && (e as { notAi?: boolean }).notAi) return
   lastStatus = { ok: false, detail: friendlyError(e) }
 }
 export function markAiOk(): void {

@@ -1,10 +1,10 @@
-import type { JiraSnapshot } from '@shared/jira'
+import { applyAliases, DEFAULT_PREFS, type JiraPrefs, type JiraSnapshot } from '@shared/jira'
 import { isReadOnlyTool } from '@shared/permissions'
 import * as db from './db'
 import { dataChanged } from './events'
 import { getSettings } from './settings'
 import { baseSystem } from './agent/context'
-import { agentEnv, friendlyError, markAiFailure, markAiOk, runAgent } from './agent/client'
+import { agentEnv, friendlyError, markAiFailure, markAiOk, runAgent, setupError } from './agent/client'
 import { connectorLabel, enabledConnectorNames } from './agent/connectors'
 
 /**
@@ -18,8 +18,33 @@ const ERROR_KEY = 'jira.error'
 /** Cada cuánto se vuelve a leer sola mientras la app está abierta. */
 export const JIRA_EVERY = 3 * 60 * 60_000
 
+export function jiraPrefs(): JiraPrefs {
+  let saved: Partial<JiraPrefs> = {}
+  try {
+    saved = JSON.parse(db.getSetting('jira.prefs') ?? '{}') as Partial<JiraPrefs>
+  } catch {
+    saved = {}
+  }
+  return {
+    ...DEFAULT_PREFS,
+    road: db.getSetting('jira.road') || DEFAULT_PREFS.road,
+    fp: db.getSetting('jira.fp') || DEFAULT_PREFS.fp,
+    ...saved
+  }
+}
+
+/** Guarda cómo quieres ver Jira. Devuelve true si hay que volver a leerlo (cambian proyectos o filtro). */
+export function saveJiraPrefs(p: JiraPrefs): boolean {
+  const before = jiraPrefs()
+  const clean: JiraPrefs = { road: p.road.trim().toUpperCase() || 'ROAD', fp: p.fp.trim().toUpperCase() || 'FP', filter: p.filter.trim(), hidden: p.hidden, aliases: p.aliases }
+  db.setSetting('jira.prefs', JSON.stringify(clean))
+  dataChanged('jira')
+  return before.road !== clean.road || before.fp !== clean.fp || before.filter !== clean.filter
+}
+
 export function jiraProjects(): { road: string; fp: string } {
-  return { road: db.getSetting('jira.road') || 'ROAD', fp: db.getSetting('jira.fp') || 'FP' }
+  const p = jiraPrefs()
+  return { road: p.road, fp: p.fp }
 }
 
 export function isJiraConnector(name: string): boolean {
@@ -32,11 +57,12 @@ export async function jiraConnector(): Promise<string | null> {
   return names.find(isJiraConnector) ?? null
 }
 
+/** La copia de Jira, con tus estados renombrados ya traducidos a los pasos de ROAD. */
 export function getSnapshot(): JiraSnapshot | null {
   const raw = db.getSetting(SNAPSHOT_KEY)
   if (!raw) return null
   try {
-    return JSON.parse(raw) as JiraSnapshot
+    return applyAliases(JSON.parse(raw) as JiraSnapshot, jiraPrefs().aliases)
   } catch {
     return null
   }
@@ -62,7 +88,7 @@ const SNAPSHOT_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['key', 'title', 'status', 'quarter', 'url', 'developers', 'taskKeys', 'epicKey', 'updated'],
+        required: ['key', 'title', 'status', 'quarter', 'url', 'developers', 'taskKeys', 'epicKey', 'updated', 'kpi'],
         properties: {
           key: str,
           title: str,
@@ -72,7 +98,8 @@ const SNAPSHOT_SCHEMA = {
           developers: { type: 'array', items: str, description: 'Desarrolladores que participan (responsable u otros asignados)' },
           taskKeys: { type: 'array', items: str, description: 'Claves de las tareas FP relacionadas' },
           epicKey: { ...strOrNull, description: 'Épica de FP que replica esta iniciativa' },
-          updated: { ...strOrNull, description: 'Última actualización, ISO 8601' }
+          updated: { ...strOrNull, description: 'Última actualización, ISO 8601' },
+          kpi: { ...strOrNull, description: 'El KPI o métrica que se quiere mover, tal como aparece en la descripción o en un campo; null si no lo hay' }
         }
       }
     },
@@ -112,7 +139,7 @@ const SNAPSHOT_SCHEMA = {
   }
 } as const
 
-function role(road: string, fp: string): string {
+function role(road: string, fp: string, filter = ''): string {
   return `Eres el lector de Jira del «segundo cerebro». Usa SOLO herramientas de lectura de Jira. No crees, cambies ni borres nada.
 
 Tienes que devolver una copia resumida de dos proyectos:
@@ -121,13 +148,14 @@ Tienes que devolver una copia resumida de dos proyectos:
    - "status": el nombre exacto del estado (Backlog 3, Backlog 2, Backlog, Discovery, Ready to refine, Ready to dev, WIP, Done…).
    - "quarter": el valor del campo personalizado llamado Quarter (formato «Q1 - 2027»), o null.
    - "developers": el responsable y cualquier desarrollador asignado o mencionado como participante en los campos del ticket.
+   - "kpi": el KPI o métrica que la iniciativa quiere mover, si está en la descripción o en un campo (resúmelo en pocas palabras).
    - "taskKeys": las tareas de ${fp} relacionadas (por enlaces entre tickets, por su épica o porque las mencionan).
 2. Proyecto ${fp} (tareas técnicas y épicas): las que no están terminadas y las terminadas en los últimos 30 días.
    Por ejemplo: project = ${fp} AND (statusCategory != Done OR updated >= -30d)
    - Las épicas (tipo Epic) van en "epics", con la iniciativa de ${road} que replican y las tareas que tienen dentro.
    - El resto va en "tasks". "hasDescription" es true si la descripción tiene contenido real; "estimated" si tiene puntos o estimación.
 
-Pide a Jira solo los campos que necesitas y pagina hasta tenerlo todo. No inventes datos: si no sabes algo, pon null o una lista vacía.`
+${filter ? `Aplica además este filtro a las dos consultas: AND (${filter})\n\n` : ''}Pide a Jira solo los campos que necesitas y pagina hasta tenerlo todo. No inventes datos: si no sabes algo, pon null o una lista vacía.`
 }
 
 /** Lee Jira y guarda la copia. Si ya se está leyendo, espera a esa lectura. */
@@ -144,11 +172,11 @@ export function syncJira(): Promise<JiraSnapshot> {
 
 async function doSync(): Promise<JiraSnapshot> {
   const connector = await jiraConnector()
-  if (!connector) throw new Error('No hay conexión de Jira. Actívala en Ajustes → Entradas → De tu cuenta de Claude.')
+  if (!connector) throw setupError('Tu cuenta de Claude no tiene Jira conectado. Conéctalo en claude.ai → Ajustes → Conectores → Atlassian (Jira) y vuelve a intentarlo.')
   const { road, fp } = jiraProjects()
   try {
     const r = await runAgent({
-      system: baseSystem(role(road, fp)),
+      system: baseSystem(role(road, fp, jiraPrefs().filter)),
       prompt: `Lee ${road} y ${fp} y devuelve la copia.`,
       connectors: [connector],
       canUseTool: async (toolName, input) =>
@@ -180,4 +208,56 @@ export async function maybeSyncJira(): Promise<void> {
   if (snap && Date.now() - new Date(snap.at).getTime() < JIRA_EVERY) return
   if (!(await jiraConnector())) return
   await syncJira().catch(() => undefined)
+}
+
+export interface JiraGuess {
+  road: string | null
+  fp: string | null
+  /** Estados de las iniciativas y el paso de ROAD al que corresponden. */
+  statuses: { status: string; stage: string }[]
+  note: string
+}
+
+const GUESS_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['road', 'fp', 'statuses', 'note'],
+  properties: {
+    road: { ...strOrNull, description: 'Clave del proyecto de iniciativas de producto (roadmap)' },
+    fp: { ...strOrNull, description: 'Clave del proyecto de tareas técnicas y épicas del equipo' },
+    statuses: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['status', 'stage'],
+        properties: {
+          status: str,
+          stage: { type: 'string', enum: ['backlog3', 'backlog2', 'backlog', 'discovery', 'refine', 'dev', 'wip', 'done', 'other'] }
+        }
+      }
+    },
+    note: { type: 'string', description: 'Una o dos frases: qué has visto y qué conviene revisar' }
+  }
+} as const
+
+/** Claude mira tu Jira (solo lectura) y propone proyectos y a qué paso corresponde cada estado. */
+export async function guessJira(): Promise<JiraGuess> {
+  const connector = await jiraConnector()
+  if (!connector) throw setupError('Tu cuenta de Claude no tiene Jira conectado. Conéctalo en claude.ai → Ajustes → Conectores → Atlassian (Jira) y vuelve a intentarlo.')
+  const p = jiraPrefs()
+  const r = await runAgent({
+    system: baseSystem(`Miras el Jira del usuario, un product manager, usando SOLO herramientas de lectura. Sus pasos de producto son: Backlog 3, Backlog 2, Backlog, Discovery, Ready to refine, Ready to dev, WIP, Done. Encuentra su proyecto de iniciativas (ahora cree que es ${p.road}) y el de tareas técnicas y épicas (ahora ${p.fp}), y lista los estados que usan las iniciativas con el paso al que corresponde cada uno.`),
+    prompt: 'Deduce la configuración.',
+    connectors: [connector],
+    canUseTool: async (toolName, input) =>
+      isReadOnlyTool(toolName) ? { behavior: 'allow', updatedInput: input } : { behavior: 'deny', message: 'Solo lectura.' },
+    outputSchema: GUESS_SCHEMA as unknown as Record<string, unknown>,
+    tier: 'quick',
+    effort: 'low',
+    maxTurns: 15
+  })
+  const out = r.structured as JiraGuess | null
+  if (!out) throw new Error('Claude no pudo deducir la configuración.')
+  return out
 }

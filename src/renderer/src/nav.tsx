@@ -12,6 +12,8 @@ export interface Nav {
   /** Le manda un mensaje a Claude en el panel de la derecha (lo abre si hace falta). */
   talk: (text: string) => void
   editItem: (item: Item | null, defaults?: Partial<Item>) => void
+  /** Abre la ficha de una iniciativa de ROAD. */
+  openInitiative: (key: string) => void
 }
 
 export const NavContext = createContext<Nav>(null as unknown as Nav)

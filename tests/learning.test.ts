@@ -36,3 +36,13 @@ describe('lo que Claude aprende', () => {
     expect(listLessons().length).toBe(before + 1)
   })
 })
+
+describe('«Ahora no» repetido', () => {
+  it('lo apunta a la segunda vez, no a la primera', () => {
+    const before = listLessons().length
+    hideFlow('epic:ROAD-2', 'later', 'Crear la épica')
+    expect(listLessons().length).toBe(before)
+    hideFlow('epic:ROAD-2', 'later', 'Crear la épica')
+    expect(listLessons().at(-1)!.text).toMatch(/aplazado 2 veces/)
+  })
+})

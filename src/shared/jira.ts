@@ -17,6 +17,8 @@ export interface JiraInitiative {
   /** Épica de FP que replica esta iniciativa. */
   epicKey: string | null
   updated: string | null
+  /** KPI que se quiere mover, si aparece en la iniciativa (copias antiguas no lo tienen). */
+  kpi?: string | null
 }
 
 export interface JiraTask {
@@ -173,4 +175,40 @@ export function readAgo(iso: string, now: Date): string {
 export function matches(text: string, query: string): boolean {
   const q = norm(query)
   return !q || norm(text).includes(q)
+}
+
+/** Cómo quieres ver Jira. */
+export interface JiraPrefs {
+  road: string
+  fp: string
+  /** Condición JQL extra para leer solo lo tuyo (p. ej. «team = Pagos»). */
+  filter: string
+  /** Columnas del tablero que no quieres ver. */
+  hidden: StageId[]
+  /** Estados con otro nombre en tu Jira → paso de ROAD («En curso» → WIP). */
+  aliases: Record<string, StageId>
+}
+
+export const DEFAULT_PREFS: JiraPrefs = { road: 'ROAD', fp: 'FP', filter: '', hidden: [], aliases: {} }
+
+const aliasKey = (s: string) => norm(s)
+
+/** Cambia los estados con otro nombre por el nombre del paso, para que todo lo demás los entienda. */
+export function applyAliases(snap: JiraSnapshot, aliases: Record<string, StageId>): JiraSnapshot {
+  const map = new Map(Object.entries(aliases).map(([k, v]) => [aliasKey(k), v]))
+  if (!map.size) return snap
+  return {
+    ...snap,
+    initiatives: snap.initiatives.map((i) => {
+      const to = map.get(aliasKey(i.status))
+      const label = to && ROAD_STAGES.find((s) => s.id === to)?.label
+      return label ? { ...i, status: label } : i
+    })
+  }
+}
+
+/** Estados de las iniciativas que la app no reconoce como un paso de ROAD. */
+export function unknownStatuses(snap: JiraSnapshot | null): string[] {
+  if (!snap) return []
+  return [...new Set(snap.initiatives.filter((i) => stageOf(i.status) === 'other').map((i) => i.status))]
 }

@@ -25,9 +25,12 @@ import { flowSignals, mergeFlow } from '@shared/flow'
 import { MEETING_LABEL, meetingType, prepFromJira } from '@shared/meetings'
 import { decideNews, lastNewsAt, newsRunning, pendingNews, reviewNews, type NewsDecision } from './novedades'
 import { currentMeasures, planMeasurements, recordMeasure, setMeasureDate } from './measure'
+import { addRoadNotes, listRoadNotes, markRoadNote } from './roadlog'
+import { nextStepFor, stagePath } from '@shared/initiative'
+import { sprintRowFor } from '@shared/sprint'
 import { meetingNoteIds, noteForMeeting, reviewNote, type ReviewEntry } from './meetings'
 import { forgetLesson, hiddenFlow, hideFlow, learn, lessonsSinceSuggest, listLessons, markSuggested } from './learning'
-import { getSnapshot, jiraConnector, jiraProjects, jiraSyncing, lastJiraError, syncJira } from './jira'
+import { getSnapshot, guessJira, jiraConnector, jiraPrefs, jiraProjects, jiraSyncing, lastJiraError, saveJiraPrefs, syncJira } from './jira'
 
 /** Llamadas que usan la IA: anotan el estado de la conexión. */
 async function withAi<T>(fn: () => Promise<T>): Promise<T> {
@@ -128,10 +131,40 @@ const api: Record<string, (...args: any[]) => unknown> = {
     connector: await jiraConnector(),
     syncing: jiraSyncing(),
     error: lastJiraError(),
-    projects: jiraProjects()
+    projects: jiraProjects(),
+    prefs: jiraPrefs()
   }),
+  'jira.savePrefs': (p) => {
+    const resync = saveJiraPrefs(p)
+    if (resync) void syncJira().catch(() => undefined)
+    return resync
+  },
+  'jira.guess': () => withAi(() => guessJira()),
   'jira.sync': () => syncJira().then(() => true),
   'measure.list': () => currentMeasures(),
+  'initiative.get': (key: string) => {
+    const snap = getSnapshot()
+    const i = snap?.initiatives.find((x) => x.key.toUpperCase() === key.toUpperCase())
+    if (!snap || !i) return null
+    const roadNotes = listRoadNotes(i.key).slice().reverse()
+    const linked = new Map<string, { id: string; title: string }>()
+    for (const n of roadNotes) if (n.noteId && db.getNote(n.noteId)) linked.set(n.noteId, { id: n.noteId, title: n.noteTitle ?? '' })
+    for (const n of db.searchNotes(i.key, 10)) if (!linked.has(n.id)) linked.set(n.id, { id: n.id, title: n.title })
+    return {
+      initiative: i,
+      path: stagePath(i.status),
+      nextStep: nextStepFor(i, snap, new Date()),
+      work: sprintRowFor(i, snap, new Date()),
+      measure: currentMeasures().find((m) => m.key === i.key) ?? null,
+      roadNotes,
+      notes: [...linked.values()]
+    }
+  },
+  'roadnotes.mark': (id: string, registered: boolean) => {
+    markRoadNote(id, registered)
+    dataChanged('jira')
+    return true
+  },
   'measure.plan': () => withAi(() => planMeasurements()),
   'measure.setDate': (key: string, date: string) => setMeasureDate(key, date),
   'measure.record': (key: string, text: string) => recordMeasure(key, text),
@@ -249,6 +282,11 @@ const api: Record<string, (...args: any[]) => unknown> = {
     // Lo que la detección automática había propuesto de esta nota ya queda repartido.
     for (const i of db.listItems({ status: ['proposed'] }).filter((x) => x.sourceRef === id))
       db.updateItem(i.id, { status: 'dismissed', dismissReason: 'Repartido al revisar la nota' })
+    addRoadNotes(
+      chosen
+        .filter((e) => e.tag !== 'ENCARGO' && e.roadKey)
+        .map((e) => ({ key: e.roadKey!, tag: e.tag, text: e.text + (e.person ? ` (${e.person})` : ''), noteId: id, noteTitle: note?.title ?? null }))
+    )
     for (const e of skipped) learn('repartir notas', `No quiso repartir: [${e.tag}] ${e.text}`)
     dataChanged('items')
     db.setSetting(`note.distributed.${id}`, new Date().toISOString())
@@ -369,8 +407,8 @@ const api: Record<string, (...args: any[]) => unknown> = {
   },
 
   // resolver y preguntar
-  'chat.start': (itemId: string | null, text: string, drafts: boolean) => chatStart(itemId, text, drafts),
-  'chat.send': (runId: string, text: string, drafts: boolean) => chatSend(runId, text, drafts),
+  'chat.start': (itemId: string | null, text: string, drafts: boolean, where?: string) => chatStart(itemId, text, drafts, where),
+  'chat.send': (runId: string, text: string, drafts: boolean, where?: string) => chatSend(runId, text, drafts, where),
   'chat.stop': (runId: string) => chatStop(runId),
   'chat.close': (runId: string) => chatClose(runId),
   'runs.list': () => db.listRuns(),

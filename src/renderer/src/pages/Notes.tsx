@@ -1,3 +1,4 @@
+import { setScreenDetail } from "../screen";
 import { ReviewNote } from "../components/ReviewNote";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { AiStatus, Area, Item, Note } from "@shared/types";
@@ -324,6 +325,9 @@ function NoteView({
   const [reviewing, setReviewing] = useState(false);
   const [note, setNote] = useState<Note | null>(null);
   const [title, setTitle] = useState("");
+  useEffect(() => {
+    setScreenDetail(`nota «${title || "sin título"}»`);
+  }, [title]);
   const [saved, setSaved] = useState(true);
   const draft = useRef<{ json: string; plain: string } | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined);

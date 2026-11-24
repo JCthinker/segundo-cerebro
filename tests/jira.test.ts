@@ -92,3 +92,14 @@ describe('utilidades', () => {
     expect(readAgo('2026-11-23T10:00:00Z', now)).toBe('ayer')
   })
 })
+
+describe('personalizar', () => {
+  it('los estados con otro nombre pasan a su paso', async () => {
+    const { applyAliases, unknownStatuses } = await import('../src/shared/jira')
+    const s = snap({ initiatives: [ini({ key: 'ROAD-1', status: 'En curso' }), ini({ key: 'ROAD-2', status: 'Bloqueado' })] })
+    expect(unknownStatuses(s)).toEqual(['Bloqueado'])
+    const t = applyAliases(s, { 'bloqueado ': 'wip', 'EN CURSO': 'wip' })
+    expect(t.initiatives.map((i) => i.status)).toEqual(['WIP', 'WIP'])
+    expect(unknownStatuses(t)).toEqual([])
+  })
+})
