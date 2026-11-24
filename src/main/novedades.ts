@@ -88,7 +88,7 @@ export function reviewNews(): Promise<number> {
 async function doReview(): Promise<number> {
   if (getSettings().aiMode === 'api-key') return 0
   const names = (await enabledConnectorNames(agentEnv())).filter((n) => !isCalendarConnector(n))
-  if (!names.length) return 0
+  if (!names.length) throw new Error('No hay herramientas conectadas para leer. Actívalas en Ajustes → Entradas → De tu cuenta de Claude.')
   const seen = read<string[]>(SEEN, [])
   const items = db.listItems({ status: ['active'] }).slice(0, 80)
   const snap = getSnapshot()
