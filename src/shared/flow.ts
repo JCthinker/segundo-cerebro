@@ -33,7 +33,12 @@ export function flowKey(kind: FlowKind, ref: string | null, title: string): stri
   return `${kind}:${ref ?? title.toLowerCase().slice(0, 60)}`
 }
 
-export function flowSignals(snap: JiraSnapshot | null, events: FlowEvent[], now: Date): FlowAction[] {
+export function flowSignals(
+  snap: JiraSnapshot | null,
+  events: FlowEvent[],
+  now: Date,
+  measures: { key: string; title: string; url: string | null; kpi: string | null; due: boolean }[] = []
+): FlowAction[] {
   if (!snap) return []
   const board = buildBoard(snap, now)
   const col = (id: string) => board.find((c) => c.id === id)?.cards ?? []
@@ -66,6 +71,10 @@ export function flowSignals(snap: JiraSnapshot | null, events: FlowEvent[], now:
     add('discovery', 'Elegir el siguiente problema para discovery', 'No hay ninguna iniciativa en Discovery ni en Ready to refine: después de lo que hay ahora no queda nada preparado.')
   if (col('backlog').length < 2)
     add('backlog', 'Subir iniciativas al Backlog', `Solo ${col('backlog').length === 1 ? 'queda 1 iniciativa' : 'quedan 0 iniciativas'} en Backlog para contar en el grooming y pedir voluntarios.`)
+
+  // 4. Medir lo lanzado.
+  for (const m of measures.filter((x) => x.due))
+    add('measure', `Medir «${m.title}»`, `Ya toca ver si ha movido ${m.kpi ? `«${m.kpi}»` : 'su KPI'} y dejar la conclusión en ROAD.`, m.key, m.url)
 
   return out
 }

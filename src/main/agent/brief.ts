@@ -7,6 +7,7 @@ import { letGoCandidates, rankItems } from '@shared/priority'
 import type { Brief, CalendarEvent, ScoredItem } from '@shared/types'
 import * as db from '../db'
 import { getSnapshot } from '../jira'
+import { currentMeasures } from '../measure'
 import { syncAllCalendars, syncAllPulls } from '../sources'
 import { pendingNews, reviewNews } from '../novedades'
 import { cerebroServer } from './app-mcp'
@@ -124,7 +125,7 @@ export async function generateBrief(useAI: boolean): Promise<Brief> {
   const upcoming = [...events, ...tomorrowEvents]
   const week = weekEvents(day)
   const snap = getSnapshot()
-  const signals = flowSignals(snap, week, new Date())
+  const signals = flowSignals(snap, week, new Date(), currentMeasures().map((m) => ({ key: m.key, title: m.title, url: m.url, kpi: m.plan.kpi, due: m.due })))
   const base = fallbackBrief(day, ranked, events, upcoming, signals, week)
   if (!useAI) {
     const kept = keepChecks(db.getBrief(day), base)

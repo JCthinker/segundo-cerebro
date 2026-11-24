@@ -63,3 +63,15 @@ describe('utilidades del flujo', () => {
     expect(fallbackWeekly([], [], now)).toMatch(/al día/)
   })
 })
+
+describe('medir lo lanzado', () => {
+  it('propone medir solo lo que ya toca', () => {
+    const s = snap([ini({ key: 'ROAD-6' }), ini({ key: 'ROAD-7' }), ini({ key: 'ROAD-8', status: 'Discovery', developers: ['x'] }), ini({ key: 'ROAD-9', status: 'Ready to refine' })])
+    const a = flowSignals(s, [], now, [
+      { key: 'ROAD-1', title: 'Pagos', url: null, kpi: 'Conversión', due: true },
+      { key: 'ROAD-2', title: 'Otra', url: null, kpi: null, due: false }
+    ])
+    expect(a.map((x) => x.key)).toEqual(['measure:ROAD-1'])
+    expect(a[0].why).toMatch(/Conversión/)
+  })
+})

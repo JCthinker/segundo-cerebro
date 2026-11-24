@@ -6,6 +6,7 @@ import { dataChanged } from './events'
 import { getSettings } from './settings'
 import { syncAllCalendars } from './sources'
 import { maybeSyncJira } from './jira'
+import { maybePlanMeasurements } from './measure'
 import { maybeReviewNews } from './novedades'
 
 let briefRunning = false
@@ -15,7 +16,7 @@ export function startScheduler(): void {
   void syncAllCalendars()
   setInterval(() => void syncAllCalendars(), 30 * 60_000)
   const jira = () => {
-    if (getSettings().onboarded) void maybeSyncJira()
+    if (getSettings().onboarded) void maybeSyncJira().then(() => maybePlanMeasurements())
   }
   setTimeout(jira, 90_000)
   setInterval(jira, 30 * 60_000)

@@ -24,6 +24,7 @@ import { checkForUpdate, installNow, updateStatus } from './updater'
 import { flowSignals, mergeFlow } from '@shared/flow'
 import { MEETING_LABEL, meetingType, prepFromJira } from '@shared/meetings'
 import { decideNews, lastNewsAt, newsRunning, pendingNews, reviewNews, type NewsDecision } from './novedades'
+import { currentMeasures, planMeasurements, recordMeasure, setMeasureDate } from './measure'
 import { meetingNoteIds, noteForMeeting, reviewNote, type ReviewEntry } from './meetings'
 import { hiddenFlow, hideFlow, learn, listLessons } from './learning'
 import { getSnapshot, jiraConnector, jiraProjects, jiraSyncing, lastJiraError, syncJira } from './jira'
@@ -73,11 +74,15 @@ function todayView(): TodayView {
     areas,
     proposedCount: proposed.length,
     proposed,
-    flow: mergeFlow(flowSignals(getSnapshot(), events, new Date()), brief?.flow, hiddenFlow(), date),
+    flow: mergeFlow(flowSignals(getSnapshot(), events, new Date(), measuresForFlow()), brief?.flow, hiddenFlow(), date),
     encargos: active.filter((i) => i.kind === 'promise').length,
     weeklyAnswered: !!brief && db.getSetting('weekly.answered') === brief.generatedAt,
     meetings: meetingInfo(events)
   }
+}
+
+export function measuresForFlow() {
+  return currentMeasures().map((m) => ({ key: m.key, title: m.title, url: m.url, kpi: m.plan.kpi, due: m.due }))
 }
 
 function meetingInfo(events: CalendarEvent[]): Record<string, MeetingInfo> {
@@ -125,6 +130,10 @@ const api: Record<string, (...args: any[]) => unknown> = {
     projects: jiraProjects()
   }),
   'jira.sync': () => syncJira().then(() => true),
+  'measure.list': () => currentMeasures(),
+  'measure.plan': () => withAi(() => planMeasurements()),
+  'measure.setDate': (key: string, date: string) => setMeasureDate(key, date),
+  'measure.record': (key: string, text: string) => recordMeasure(key, text),
 
   // hoy
   'today.get': () => todayView(),
