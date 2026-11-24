@@ -79,6 +79,7 @@ export function openDb(file: string): void {
     ).run(addDays(toDay(new Date()), 1), now())
     setSetting('migr.undatedTomorrow', '1')
   }
+  closeStaleRuns()
 }
 
 const now = () => new Date().toISOString()
@@ -365,12 +366,16 @@ type RunRow = { id: string; item_id: string | null; goal: string; mode: 'normal'
 const toRun = (r: RunRow): ActionRun => ({
   id: r.id, itemId: r.item_id, goal: r.goal, mode: r.mode, status: r.status, log: JSON.parse(r.log_json), createdAt: r.created_at
 })
-export function createRun(itemId: string | null, goal: string, mode: 'normal' | 'drafts'): ActionRun {
+export function createRun(itemId: string | null, goal: string, mode: 'normal' | 'drafts', status: ActionRun['status'] = 'running'): ActionRun {
   const id = randomUUID()
   db.prepare('INSERT INTO action_runs(id, item_id, goal, mode, status, log_json, created_at) VALUES(?, ?, ?, ?, ?, ?, ?)').run(
-    id, itemId, goal, mode, 'running', '[]', now()
+    id, itemId, goal, mode, status, '[]', now()
   )
   return getRun(id)!
+}
+/** Actualiza un encargo que solo tenía plan: nuevo objetivo, modo y estado (al rehacer el plan o lanzarlo). */
+export function updatePlannedRun(id: string, goal: string, mode: 'normal' | 'drafts', status: ActionRun['status']): boolean {
+  return db.prepare("UPDATE action_runs SET goal = ?, mode = ?, status = ? WHERE id = ? AND status = 'planned'").run(goal, mode, status, id).changes > 0
 }
 export function getRun(id: string): ActionRun | null {
   const r = db.prepare('SELECT * FROM action_runs WHERE id = ?').get(id) as RunRow | undefined
@@ -384,6 +389,10 @@ export function appendRunLog(id: string, entry: RunLogEntry): void {
 }
 export function setRunStatus(id: string, status: ActionRun['status']): void {
   db.prepare('UPDATE action_runs SET status = ? WHERE id = ?').run(status, id)
+}
+/** Si la app se cerró con Claude trabajando, ese encargo no terminó: se marca como detenido. */
+export function closeStaleRuns(): void {
+  db.prepare("UPDATE action_runs SET status = 'cancelled' WHERE status = 'running'").run()
 }
 export function listRuns(limit = 30): ActionRun[] {
   return (db.prepare('SELECT * FROM action_runs ORDER BY created_at DESC LIMIT ?').all(limit) as RunRow[]).map(toRun)

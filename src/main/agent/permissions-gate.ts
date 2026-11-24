@@ -60,7 +60,7 @@ export function makeGate(runId: string, opts: { draftsOnly: boolean; log: (e: Ru
       opts.log({ at: new Date().toISOString(), type: 'approved', text: `${label}: aprobado`, toolName, input })
       return { behavior: 'allow', updatedInput: input }
     }
-    opts.log({ at: new Date().toISOString(), type: 'denied', text: `${label}: rechazado por ti`, toolName, input })
+    opts.log({ at: new Date().toISOString(), type: 'denied', text: `${label}: rechazado por ti`, toolName, input, byUser: true })
     return { behavior: 'deny', message: 'El usuario ha rechazado esta acción. No la repitas; termina con lo demás y deja el contenido como borrador en tu respuesta.' }
   }
 }

@@ -112,10 +112,14 @@ export interface ApprovalRequest {
 
 export interface RunLogEntry {
   at: string
-  type: 'text' | 'tool' | 'approved' | 'denied' | 'draft' | 'result' | 'error'
+  type: 'text' | 'tool' | 'approved' | 'denied' | 'draft' | 'result' | 'error' | 'plan'
   text: string
   toolName?: string
   input?: unknown
+  /** En «denied»: true si lo rechazaste tú (no una regla de Mi flujo). */
+  byUser?: boolean
+  /** En «plan»: los pasos que propuso Claude. */
+  steps?: string[]
 }
 
 /** Lo que va a pasar si le das a «Hazlo»: Claude lo prepara antes de actuar. */
@@ -134,6 +138,8 @@ export interface ResolvePlan {
   steps: PlanStep[]
   /** Lo que Claude necesita saber de ti antes de empezar, si falta algo. */
   question: string | null
+  /** Registro del encargo en el historial (se reutiliza si rehaces el plan o le das a «Hazlo»). */
+  requestId?: string
 }
 
 export interface ActionRun {
@@ -141,7 +147,8 @@ export interface ActionRun {
   itemId: string | null
   goal: string
   mode: 'normal' | 'drafts'
-  status: 'running' | 'done' | 'error' | 'cancelled'
+  /** planned: Claude preparó el plan y todavía no se ha lanzado. */
+  status: 'planned' | 'running' | 'done' | 'error' | 'cancelled'
   log: RunLogEntry[]
   createdAt: string
 }

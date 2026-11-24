@@ -135,7 +135,7 @@ export function ResolvePanel({ item, initialGoal, onClose }: { item: Item | null
     setText('')
     setStage('planning')
     try {
-      const p = await call<ResolvePlan>('resolve.plan', item?.id ?? null, buildGoal(all, done()), mode)
+      const p = await call<ResolvePlan>('resolve.plan', item?.id ?? null, buildGoal(all, done()), mode, plan?.requestId ?? null)
       setPlan(p)
       setThread((t) => [...t, { kind: 'plan', plan: p }])
       setStage('plan')

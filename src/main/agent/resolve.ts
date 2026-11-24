@@ -1,6 +1,7 @@
 import type { ActionRun, PlanStep, ResolvePlan, RunLogEntry } from '@shared/types'
 import { isReadOnlyTool, parsePermissions, stepEffect } from '@shared/permissions'
 import { KIND_LABEL } from '@shared/types'
+import { requestTitle } from '@shared/history'
 import * as db from '../db'
 import { dataChanged, emit } from '../events'
 import { cerebroServer, connectedToolsSummary, userMcpServers } from './app-mcp'
@@ -67,7 +68,7 @@ const PLAN_ROLE = `Eres el asistente personal del usuario. Antes de actuar, le e
 - Si el usuario ya te ha contestado algo, úsalo: nunca repitas una pregunta que ya ha respondido.`
 
 /** Claude mira el contexto (sin tocar nada) y explica qué hará y qué pasará con cada paso. */
-export async function planResolve(itemId: string | null, goal: string, mode: 'normal' | 'drafts'): Promise<ResolvePlan> {
+export async function planResolve(itemId: string | null, goal: string, mode: 'normal' | 'drafts', requestId?: string | null): Promise<ResolvePlan> {
   const r = await runAgent({
     system: baseSystem(PLAN_ROLE) + `\n\n${await connectedToolsSummary()}`,
     prompt: `${describeItem(itemId)}\n\nLo que quiere el usuario: ${goal || 'Resuélvelo.'}${mode === 'drafts' ? '\n\nQuiere SOLO BORRADORES: nada se enviará.' : ''}`,
@@ -86,16 +87,30 @@ export async function planResolve(itemId: string | null, goal: string, mode: 'no
   const raw = r.structured as { summary: string; steps: Omit<PlanStep, 'effect'>[]; question: string | null } | null
   if (!raw) throw new Error('Claude no ha podido preparar el plan. Vuelve a intentarlo.')
   const rules = parsePermissions(db.getWorkflow().markdown)
-  return {
+  const plan: ResolvePlan = {
     summary: raw.summary,
     question: raw.question?.trim() || null,
     steps: raw.steps.map((st) => ({ ...st, effect: stepEffect(st.kind, st.tool, rules, { draftsOnly: mode === 'drafts' }) }))
   }
+  // Queda en el historial como «pedido, sin lanzar» hasta que le des a «Hazlo».
+  const title = titleFor(itemId, goal)
+  const id = requestId && db.updatePlannedRun(requestId, title, mode, 'planned') ? requestId : db.createRun(itemId, title, mode, 'planned').id
+  db.appendRunLog(id, { at: new Date().toISOString(), type: 'plan', text: plan.summary, steps: plan.steps.map((st) => st.text) })
+  dataChanged('runs')
+  return { ...plan, requestId: id }
+}
+
+/** El título del encargo en el historial: la tarea, o lo primero que le pediste. */
+function titleFor(itemId: string | null, goal: string): string {
+  const item = itemId ? db.getItem(itemId) : null
+  return item ? item.title : requestTitle(goal)
 }
 
 export function startResolve(itemId: string | null, goal: string, mode: 'normal' | 'drafts', plan?: ResolvePlan | null): ActionRun {
-  const item = itemId ? db.getItem(itemId) : null
-  const run = db.createRun(itemId, goal || item?.title || 'Tarea', mode)
+  const title = titleFor(itemId, goal)
+  const run =
+    plan?.requestId && db.updatePlannedRun(plan.requestId, title, mode, 'running') ? db.getRun(plan.requestId)! : db.createRun(itemId, title, mode)
+  dataChanged('runs')
   const ac = new AbortController()
   running.set(run.id, ac)
 
@@ -141,6 +156,7 @@ export function startResolve(itemId: string | null, goal: string, mode: 'normal'
       running.delete(run.id)
       emit('run-updated', db.getRun(run.id))
       dataChanged('items')
+      dataChanged('runs')
     }
   })()
 

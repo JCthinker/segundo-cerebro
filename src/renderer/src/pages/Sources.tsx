@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import type { ActionRun, AiStatus, ClaudeConnector, McpServer, McpServerConfigJson, Settings, Source } from '@shared/types'
+import type { AiStatus, ClaudeConnector, McpServer, McpServerConfigJson, Settings, Source } from '@shared/types'
 import { call, useAction, useData } from '../api'
-import { Button, Card, Empty, ErrorNote, Field, Icon, inputCls, Modal, PageHeader, Pill, SectionLabel, Spinner, textareaCls } from '../components/ui'
+import { Button, Card, ErrorNote, Field, Icon, inputCls, Modal, PageHeader, SectionLabel, Spinner, textareaCls } from '../components/ui'
 import { useNav } from '../nav'
 
 /** Plantillas para conectar herramientas. Son un punto de partida: revisa la documentación de cada proveedor. */
@@ -63,7 +63,6 @@ export function Sources({ ai }: { ai: AiStatus | null }) {
   const { go } = useNav()
   const { data: sources = [] } = useData<Source[]>('sources.list', [], ['sources', 'events'])
   const { data: servers = [] } = useData<McpServer[]>('mcp.list', [], ['mcp'])
-  const { data: runs = [] } = useData<ActionRun[]>('runs.list', [], ['items'])
   const [editing, setEditing] = useState<Partial<McpServer> | null>(null)
   const [pullFor, setPullFor] = useState<Partial<Source> | null>(null)
   const [icsUrl, setIcsUrl] = useState('')
@@ -185,23 +184,13 @@ export function Sources({ ai }: { ai: AiStatus | null }) {
       ) : null}
 
       <SectionLabel>Registro de lo que ha hecho Claude</SectionLabel>
-      {runs.length ? (
-        <Card className="px-4">
-          {runs.map((r) => (
-            <div key={r.id} className="flex items-center gap-2 border-b border-line py-2 text-[13px] last:border-0">
-              <span className="w-28 shrink-0 text-[12px] text-faint">{new Date(r.createdAt).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })}</span>
-              <span className="min-w-0 flex-1 truncate">{r.goal}</span>
-              <span className="text-[12px] text-faint">
-                {r.log.filter((e) => e.type === 'approved').length} aprobadas · {r.log.filter((e) => e.type === 'draft').length} borradores
-              </span>
-              {r.mode === 'drafts' ? <Pill>Solo borradores</Pill> : null}
-              <Pill tone={r.status === 'done' ? 'success' : r.status === 'error' ? 'danger' : 'neutral'}>{r.status === 'done' ? 'Hecho' : r.status === 'error' ? 'Error' : r.status === 'running' ? 'En curso' : 'Cancelado'}</Pill>
-            </div>
-          ))}
-        </Card>
-      ) : (
-        <Empty title="Todavía no has pedido a Claude que resuelva nada">Pulsa «Resolver» en cualquier promesa o tarea.</Empty>
-      )}
+      <p className="text-[13px] text-muted">
+        Ahora está en{' '}
+        <button className="font-medium text-ink underline" onClick={() => go('history')}>
+          Historial
+        </button>
+        , junto con lo que has completado, descartado o rechazado.
+      </p>
 
       {editing ? <McpEditor server={editing} onClose={() => setEditing(null)} /> : null}
       {pullFor ? <PullEditor source={pullFor} onClose={() => setPullFor(null)} /> : null}

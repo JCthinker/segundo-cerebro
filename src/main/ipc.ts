@@ -3,6 +3,7 @@ import { writeFile } from 'node:fs/promises'
 import { addDays, toDay } from '@shared/dates'
 import { rankItems, scoreItem } from '@shared/priority'
 import { toggleCheck } from '@shared/plan'
+import { buildHistory } from '@shared/history'
 import type { ResolvePlan, TodayView } from '@shared/types'
 import * as db from './db'
 import { dataChanged } from './events'
@@ -105,6 +106,7 @@ const api: Record<string, (...args: any[]) => unknown> = {
 
   // elementos
   'items.list': (filter) => db.listItems(filter),
+  'items.get': (id: string) => db.getItem(id),
   'items.create': (p) => {
     const i = db.createItem(p)
     dataChanged('items')
@@ -256,10 +258,12 @@ const api: Record<string, (...args: any[]) => unknown> = {
   },
 
   // resolver y preguntar
-  'resolve.plan': (itemId: string | null, goal: string, mode: 'normal' | 'drafts') => withAi(() => planResolve(itemId, goal, mode)),
+  'resolve.plan': (itemId: string | null, goal: string, mode: 'normal' | 'drafts', requestId?: string | null) =>
+    withAi(() => planResolve(itemId, goal, mode, requestId)),
   'resolve.start': (itemId: string | null, goal: string, mode: 'normal' | 'drafts', plan?: ResolvePlan | null) => startResolve(itemId, goal, mode, plan),
   'resolve.cancel': (runId: string) => cancelRun(runId),
   'runs.list': () => db.listRuns(),
+  'history.get': () => buildHistory(db.listItems({ status: ['done', 'dismissed'] }), db.listRuns(1000)),
   'runs.get': (id: string) => db.getRun(id),
   'approvals.answer': (id: string, approved: boolean) => answerApproval(id, approved),
   ask: (history: ChatMessage[]) => withAi(() => ask(history)),

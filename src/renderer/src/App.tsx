@@ -10,6 +10,7 @@ import { Icon } from './components/ui'
 import { Onboarding } from './Onboarding'
 import { Dashboard } from './pages/Dashboard'
 import { Notes } from './pages/Notes'
+import { History } from './pages/History'
 import { WORKFLOW_NOTE_ID } from './pages/Workflow'
 import { UsageMeter } from './components/UsageMeter'
 import { Sources } from './pages/Sources'
@@ -17,7 +18,8 @@ import { Settings } from './pages/Settings'
 
 const NAV: { page: Page; label: string; icon: Parameters<typeof Icon>[0]['name'] }[] = [
   { page: 'today', label: 'Dashboard', icon: 'sun' },
-  { page: 'notes', label: 'Notas', icon: 'notes' }
+  { page: 'notes', label: 'Notas', icon: 'notes' },
+  { page: 'history', label: 'Historial', icon: 'history' }
 ]
 
 /** Ajustes agrupa lo que se configura una vez: Claude, de dónde sale el contexto y tus reglas. */
@@ -140,6 +142,7 @@ export function App() {
             ) : null}
             {page === 'today' && <Dashboard ai={ai} shortcut={settings.shortcut} />}
             {page === 'notes' && <Notes ai={ai} />}
+            {page === 'history' && <History />}
             {page === 'sources' && <Sources ai={ai} />}
             {page === 'settings' && <Settings ai={ai} onAi={setAi} />}
           </div>
