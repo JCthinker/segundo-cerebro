@@ -4,6 +4,7 @@ import { formatDayLong, parseDay } from '@shared/dates'
 import { isDone, planDays, todayIds, type DayPlan, type PlanEntry } from '@shared/plan'
 import { call, useAction, useData } from '../api'
 import { DismissButton } from '../components/Dismiss'
+import { NewsBox } from '../components/NewsBox'
 import { CheckButton, ItemRow, SourceLine } from '../components/ItemRow'
 import { Button, Card, ErrorNote, Icon, inputCls, Pill, SectionLabel, textareaCls } from '../components/ui'
 import { useNav } from '../nav'
@@ -70,6 +71,8 @@ export function Dashboard({ ai, shortcut }: { ai: AiStatus | null; shortcut: str
       {brief ? <p className="font-voice mb-4 text-[16px] leading-relaxed text-muted">{brief.summary}</p> : null}
 
       <QuickBox ai={ai} shortcut={shortcut} />
+
+      <NewsBox items={ranked} />
 
       <FlowSection items={data.flow} />
 

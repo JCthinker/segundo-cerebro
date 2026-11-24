@@ -23,6 +23,7 @@ import { shortcutLabel } from './shortcut'
 import { checkForUpdate, installNow, updateStatus } from './updater'
 import { flowSignals, mergeFlow } from '@shared/flow'
 import { MEETING_LABEL, meetingType, prepFromJira } from '@shared/meetings'
+import { decideNews, lastNewsAt, newsRunning, pendingNews, reviewNews, type NewsDecision } from './novedades'
 import { meetingNoteIds, noteForMeeting, reviewNote, type ReviewEntry } from './meetings'
 import { hiddenFlow, hideFlow, learn, listLessons } from './learning'
 import { getSnapshot, jiraConnector, jiraProjects, jiraSyncing, lastJiraError, syncJira } from './jira'
@@ -152,6 +153,11 @@ const api: Record<string, (...args: any[]) => unknown> = {
     return true
   },
   'learning.list': () => listLessons(),
+
+  // novedades
+  'news.get': () => ({ pending: pendingNews(), running: newsRunning(), last: lastNewsAt() }),
+  'news.review': () => withAi(() => reviewNews()),
+  'news.decide': (id: string, d: NewsDecision) => decideNews(id, d),
 
   // encargos: lo que te piden otras personas
   'encargos.get': () => {

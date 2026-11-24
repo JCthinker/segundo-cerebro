@@ -6,10 +6,11 @@ import { dataChanged } from './events'
 import { getSettings } from './settings'
 import { syncAllCalendars } from './sources'
 import { maybeSyncJira } from './jira'
+import { maybeReviewNews } from './novedades'
 
 let briefRunning = false
 
-/** Mientras la app está abierta: brief matinal, calendarios cada 30 minutos y Jira cada 3 horas. */
+/** Mientras la app está abierta: brief matinal, calendarios cada 30 minutos, novedades cada 2 horas y Jira cada 3. */
 export function startScheduler(): void {
   void syncAllCalendars()
   setInterval(() => void syncAllCalendars(), 30 * 60_000)
@@ -18,6 +19,13 @@ export function startScheduler(): void {
   }
   setTimeout(jira, 90_000)
   setInterval(jira, 30 * 60_000)
+  // Novedades: el modelo barato lee lo nuevo cada 2 horas, solo en horario de trabajo.
+  const news = () => {
+    const h = new Date().getHours()
+    if (getSettings().onboarded && h >= 8 && h < 20) void maybeReviewNews()
+  }
+  setTimeout(news, 4 * 60_000)
+  setInterval(news, 30 * 60_000)
   setInterval(() => void maybeMorningBrief(), 5 * 60_000)
   setTimeout(() => void maybeMorningBrief(), 20_000)
 }

@@ -7,7 +7,8 @@ import { letGoCandidates, rankItems } from '@shared/priority'
 import type { Brief, CalendarEvent, ScoredItem } from '@shared/types'
 import * as db from '../db'
 import { getSnapshot } from '../jira'
-import { sweepConnectors, syncAllCalendars, syncAllPulls } from '../sources'
+import { syncAllCalendars, syncAllPulls } from '../sources'
+import { pendingNews, reviewNews } from '../novedades'
 import { cerebroServer } from './app-mcp'
 import { baseSystem } from './context'
 import { runAgent } from './client'
@@ -102,7 +103,7 @@ Tu trabajo:
 2. Para cada reunión de hoy y de mañana, una checklist corta (2-4 puntos) de qué preparar antes. En «yaSabidoDeJira» está lo que la app ya muestra sacado de Jira: no lo repitas, complétalo (contexto de notas, qué decidir, a quién preguntar). Usa search_notes y list_items para encontrar contexto relacionado con el título o los asistentes. Si no hay nada que preparar, deja la lista vacía.
 3. Proponer qué puede soltar (aplazar o delegar). Nunca encargos de otras personas.
 4. Indicar qué reglas de «Mi flujo» han influido.
-En «nuevoPorConfirmar» está lo recién detectado en notas y herramientas (Jira, correo…) que el usuario aún no ha confirmado. No lo pongas en las 3 cosas de hoy, pero si algo es importante o urgente, menciónalo en el resumen para que lo revise.
+En «novedades» está lo nuevo de sus herramientas que aún no ha repasado: si algo es urgente, menciónalo en el resumen. En «nuevoPorConfirmar» está lo recién detectado en notas y herramientas (Jira, correo…) que el usuario aún no ha confirmado. No lo pongas en las 3 cosas de hoy, pero si algo es importante o urgente, menciónalo en el resumen para que lo revise.
 Usa solo ids que aparezcan en los datos.`
 
 export async function generateBrief(useAI: boolean): Promise<Brief> {
@@ -110,8 +111,8 @@ export async function generateBrief(useAI: boolean): Promise<Brief> {
     // Antes de ordenar el día: calendario al día y lo nuevo de tus herramientas (Jira, correo…).
     await syncAllCalendars().catch(() => undefined)
     await syncAllPulls().catch(() => undefined)
-    // Y las conexiones de tu cuenta de Claude que no tienen una lectura propia en Entradas.
-    await sweepConnectors().catch(() => undefined)
+    // Y lo nuevo de tus herramientas (Slack, correo, Drive…), que va a Novedades.
+    await reviewNews().catch(() => undefined)
   }
   const day = toDay(new Date())
   const areas = db.listAreas()
@@ -147,6 +148,7 @@ export async function generateBrief(useAI: boolean): Promise<Brief> {
       : 'Sin leer todavía',
     accionesFlujo: signals.map((f) => ({ clave: f.key, titulo: f.title, porque: f.why })),
     agendaSemana: week.filter((e) => !e.allDay).map((e) => ({ titulo: e.title, inicio: e.start })),
+    novedades: pendingNews().slice(0, 10).map((n) => `${n.summary} (${n.tool})`),
     // Lo detectado en notas y herramientas que el usuario aún no ha confirmado.
     nuevoPorConfirmar: db.listItems({ status: ['proposed'] }).slice(0, 15).map((i) => ({
       tipo: i.kind, titulo: i.title, persona: i.person, vence: i.dueDate, origen: i.sourceType
