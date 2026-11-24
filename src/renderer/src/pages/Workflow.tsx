@@ -155,9 +155,9 @@ export function Workflow({ ai }: { ai: AiStatus | null }) {
           <div className="flex items-center gap-1.5 text-[12.5px] font-medium">
             <Icon name="sparkles" className="text-clay" /> Sugerencias de Claude
           </div>
-          <p className="mt-1 text-[12px] text-muted">Busca patrones repetidos en tus notas y compromisos que aún no estén aquí.</p>
+          <p className="mt-1 text-[12px] text-muted">Convierte en reglas lo que le has ido corrigiendo y los patrones de tus notas y encargos.</p>
           <Button size="sm" className="mt-2" busy={suggest.busy} disabled={ai?.ok === false} onClick={() => suggest.run()}>
-            Buscar patrones
+            Proponer reglas
           </Button>
           <ErrorNote>{suggest.error}</ErrorNote>
           {suggestions?.length === 0 ? <p className="mt-2 text-[12px] text-faint">No he encontrado patrones nuevos.</p> : null}
@@ -177,6 +177,8 @@ export function Workflow({ ai }: { ai: AiStatus | null }) {
             </div>
           ))}
         </Card>
+
+        <Learned />
 
         <div className="space-y-1">
           <Button
@@ -212,5 +214,39 @@ export function Workflow({ ai }: { ai: AiStatus | null }) {
         </div>
       </aside>
     </div>
+  )
+}
+
+/** Lo que Claude ha aprendido de tus correcciones: lo tiene en cuenta en cada respuesta. */
+function Learned() {
+  const { data: lessons = [] } = useData<{ at: string; where: string; text: string }[]>('learning.list', [], ['workflow', 'brief', 'news'])
+  const [all, setAll] = useState(false)
+  if (!lessons.length) return null
+  const shown = all ? lessons : lessons.slice(0, 5)
+  return (
+    <Card className="p-3">
+      <div className="flex items-center gap-1.5 text-[12.5px] font-medium">
+        <Icon name="history" /> Lo que ha aprendido de ti ({lessons.length})
+      </div>
+      <p className="mt-1 text-[12px] text-muted">Tus correcciones recientes. Claude las tiene en cuenta siempre; quita las que no sean ciertas.</p>
+      <ul className="mt-2 space-y-1.5">
+        {shown.map((l) => (
+          <li key={l.at} className="group flex items-start gap-1.5 text-[12px]">
+            <span className="min-w-0 flex-1">
+              <span className="text-faint">{l.where} · </span>
+              {l.text}
+            </span>
+            <button className="shrink-0 text-faint opacity-0 group-hover:opacity-100 hover:text-ink" title="Olvidar" onClick={() => call('learning.forget', l.at)}>
+              <Icon name="x" className="h-3.5 w-3.5" />
+            </button>
+          </li>
+        ))}
+      </ul>
+      {lessons.length > 5 ? (
+        <button className="mt-1.5 text-[12px] text-muted hover:text-ink" onClick={() => setAll(!all)}>
+          {all ? 'Ver menos' : `Ver las ${lessons.length}`}
+        </button>
+      ) : null}
+    </Card>
   )
 }

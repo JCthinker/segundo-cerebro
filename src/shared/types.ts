@@ -204,6 +204,8 @@ export interface TodayView {
   weeklyAnswered: boolean
   /** Por reunión: tipo, qué llevar según Jira y su nota, si existe. */
   meetings: Record<string, MeetingInfo>
+  /** Correcciones tuyas que Claude aún no ha propuesto convertir en reglas de Mi flujo. */
+  lessonsNew: number
 }
 
 export interface MeetingInfo {

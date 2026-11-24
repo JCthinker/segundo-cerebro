@@ -108,8 +108,10 @@ export function Settings({ ai, onAi }: { ai: AiStatus | null; onAi: (s: AiStatus
         </Field>
       </Card>
 
-      <SectionLabel>Áreas y su peso</SectionLabel>
-      <Card className="p-4">
+      {/* Las áreas ya casi no se usan: ahora manda el flujo de producto. Quedan plegadas por si acaso. */}
+      <details className="mt-6">
+        <summary className="cursor-pointer text-[12.5px] text-faint hover:text-ink">Avanzado: áreas y su peso</summary>
+      <Card className="mt-2 p-4">
         <p className="mb-3 text-[12.5px] text-muted">El peso multiplica la prioridad: 1,5 sube un 50 % lo de esa área; 0,5 lo baja a la mitad.</p>
         {areas.map((a) => (
           <div key={a.id} className="flex items-center gap-3 py-1.5">
@@ -142,6 +144,7 @@ export function Settings({ ai, onAi }: { ai: AiStatus | null; onAi: (s: AiStatus
           </Button>
         </div>
       </Card>
+      </details>
 
       <SectionLabel>Actualizaciones</SectionLabel>
       <Card className="space-y-3 p-4 text-[13px]">

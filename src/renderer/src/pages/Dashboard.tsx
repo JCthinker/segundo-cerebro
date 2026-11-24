@@ -75,6 +75,11 @@ export function Dashboard({ ai, shortcut }: { ai: AiStatus | null; shortcut: str
       <NewsBox items={ranked} />
 
       <FlowSection items={data.flow} />
+      {data.lessonsNew >= 5 ? (
+        <button className="mt-2 flex items-center gap-1.5 text-[12.5px] text-muted hover:text-ink" onClick={() => go('notes', 'mi-flujo')}>
+          <Icon name="sparkles" className="h-3.5 w-3.5 text-clay" /> Claude ha aprendido {data.lessonsNew} cosas de tus correcciones · Convertirlas en reglas de Mi flujo →
+        </button>
+      ) : null}
 
       {overdue.length ? (
         <>

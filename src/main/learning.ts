@@ -58,3 +58,18 @@ export function hideFlow(key: string, how: 'later' | 'notNeeded' | 'done', title
   db.setSetting(HIDDEN, JSON.stringify(map))
   if (how === 'notNeeded') learn('flujo', `Dijo que no hacía falta: «${title}»`)
 }
+
+/** Olvida una corrección (por su fecha), por si Claude aprendió algo que no era. */
+export function forgetLesson(at: string): void {
+  db.setSetting(KEY, JSON.stringify(listLessons().filter((l) => l.at !== at)))
+}
+
+/** Correcciones desde la última vez que se convirtieron en reglas. */
+export function lessonsSinceSuggest(): number {
+  const since = db.getSetting('learning.suggestedAt') ?? ''
+  return listLessons().filter((l) => l.at > since).length
+}
+
+export function markSuggested(): void {
+  db.setSetting('learning.suggestedAt', new Date().toISOString())
+}

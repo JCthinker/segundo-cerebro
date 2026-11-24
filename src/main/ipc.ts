@@ -26,7 +26,7 @@ import { MEETING_LABEL, meetingType, prepFromJira } from '@shared/meetings'
 import { decideNews, lastNewsAt, newsRunning, pendingNews, reviewNews, type NewsDecision } from './novedades'
 import { currentMeasures, planMeasurements, recordMeasure, setMeasureDate } from './measure'
 import { meetingNoteIds, noteForMeeting, reviewNote, type ReviewEntry } from './meetings'
-import { hiddenFlow, hideFlow, learn, listLessons } from './learning'
+import { forgetLesson, hiddenFlow, hideFlow, learn, lessonsSinceSuggest, listLessons, markSuggested } from './learning'
 import { getSnapshot, jiraConnector, jiraProjects, jiraSyncing, lastJiraError, syncJira } from './jira'
 
 /** Llamadas que usan la IA: anotan el estado de la conexión. */
@@ -77,7 +77,8 @@ function todayView(): TodayView {
     flow: mergeFlow(flowSignals(getSnapshot(), events, new Date(), measuresForFlow()), brief?.flow, hiddenFlow(), date),
     encargos: active.filter((i) => i.kind === 'promise').length,
     weeklyAnswered: !!brief && db.getSetting('weekly.answered') === brief.generatedAt,
-    meetings: meetingInfo(events)
+    meetings: meetingInfo(events),
+    lessonsNew: lessonsSinceSuggest()
   }
 }
 
@@ -152,7 +153,8 @@ const api: Record<string, (...args: any[]) => unknown> = {
   'brief.react': (agree: boolean, reason?: string) => {
     const b = db.getBrief(toDay(new Date()))
     if (b) db.setSetting('weekly.answered', b.generatedAt)
-    if (!agree) learn('lo que toca esta semana', `No estaba de acuerdo con «${b?.weekly ?? ''}». ${reason ? `Dijo: ${reason}` : ''}`)
+    const w = b?.weekly ?? ''
+    if (!agree) learn('lo que toca esta semana', `${reason ? `Dijo: «${reason}»` : 'No estaba de acuerdo'} (sobre «${w.length > 90 ? `${w.slice(0, 90)}…` : w}»)`)
     dataChanged('brief')
     return true
   },
@@ -161,7 +163,12 @@ const api: Record<string, (...args: any[]) => unknown> = {
     dataChanged('brief')
     return true
   },
-  'learning.list': () => listLessons(),
+  'learning.list': () => listLessons().slice().reverse(),
+  'learning.forget': (at: string) => {
+    forgetLesson(at)
+    dataChanged('workflow')
+    return true
+  },
 
   // novedades
   'news.get': () => ({ pending: pendingNews(), running: newsRunning(), last: lastNewsAt() }),
@@ -271,7 +278,12 @@ const api: Record<string, (...args: any[]) => unknown> = {
   },
   'workflow.versions': () => db.listWorkflowVersions(),
   'workflow.version': (v: number) => db.getWorkflowVersion(v),
-  'workflow.suggest': () => withAi(() => suggestRules()),
+  'workflow.suggest': () =>
+    withAi(() => suggestRules()).then((r) => {
+      markSuggested()
+      dataChanged('brief')
+      return r
+    }),
   'workflow.appendRule': (section: string, rule: string) => {
     const md = appendToSection(db.getWorkflow().markdown, section, rule)
     db.saveWorkflow(md)
