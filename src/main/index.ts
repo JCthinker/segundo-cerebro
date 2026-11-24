@@ -37,7 +37,7 @@ function createMain(): void {
     show: false,
     title: 'Segundo cerebro',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#1f1e1d' : '#faf9f5',
+    backgroundColor: '#000000',
     webPreferences
   })
   main.once('ready-to-show', () => main?.show())
@@ -82,6 +82,8 @@ function toggleCapture(): void {
 }
 
 app.whenReady().then(() => {
+  // La app es siempre oscura (estilo brutalista): ventanas y menús del sistema, también.
+  nativeTheme.themeSource = 'dark'
   app.setName('Segundo cerebro')
   openDb(join(app.getPath('userData'), 'cerebro.db'))
   registerIpc()

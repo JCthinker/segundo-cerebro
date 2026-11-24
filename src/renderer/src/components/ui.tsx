@@ -3,10 +3,10 @@ import type { ButtonHTMLAttributes, ReactNode } from 'react'
 type Variant = 'primary' | 'secondary' | 'ghost' | 'claude' | 'danger'
 
 const VARIANTS: Record<Variant, string> = {
-  primary: 'bg-ink text-page hover:opacity-90',
-  secondary: 'border border-line-strong bg-raised hover:bg-hover',
+  primary: 'bg-clay text-clay-ink hover:bg-ink hover:text-page',
+  secondary: 'border border-line-strong bg-page hover:border-ink',
   ghost: 'hover:bg-hover text-muted hover:text-ink',
-  claude: 'bg-clay text-clay-ink hover:opacity-90',
+  claude: 'bg-clay text-clay-ink hover:bg-ink hover:text-page',
   danger: 'border border-line-strong text-danger hover:bg-danger-bg'
 }
 
@@ -23,7 +23,7 @@ export function Button({
     <button
       {...rest}
       disabled={rest.disabled || busy}
-      className={`inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg font-medium transition-colors disabled:opacity-50 ${sz} ${VARIANTS[variant]} ${className}`}
+      className={`inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg font-medium uppercase tracking-[0.05em] transition-colors disabled:opacity-50 ${sz} ${VARIANTS[variant]} ${className}`}
     >
       {busy ? <Spinner /> : null}
       {children}
@@ -42,7 +42,7 @@ const TONES: Record<Tone, string> = {
   warning: 'bg-warning-bg text-warning',
   success: 'bg-success-bg text-success',
   info: 'bg-info-bg text-accent',
-  clay: 'bg-clay/15 text-clay'
+  clay: 'border border-clay text-clay'
 }
 
 export function Pill({ tone = 'neutral', children, className = '' }: { tone?: Tone; children: ReactNode; className?: string }) {
@@ -56,7 +56,7 @@ export function Card({ children, className = '' }: { children: ReactNode; classN
 export function SectionLabel({ children, right }: { children: ReactNode; right?: ReactNode }) {
   return (
     <div className="mt-7 mb-2 flex items-center justify-between">
-      <h2 className="text-[12.5px] font-medium text-muted">{children}</h2>
+      <h2 className="text-[11.5px] font-medium uppercase tracking-[0.08em] text-muted">{children}</h2>
       {right}
     </div>
   )

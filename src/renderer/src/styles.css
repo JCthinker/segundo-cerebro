@@ -1,4 +1,7 @@
 @import 'tailwindcss';
+@import '@fontsource/jetbrains-mono/400.css';
+@import '@fontsource/jetbrains-mono/500.css';
+@import '@fontsource/jetbrains-mono/700.css';
 
 @theme {
   --color-page: var(--page);
@@ -21,56 +24,46 @@
   --color-success: var(--success);
   --color-success-bg: var(--success-bg);
   --color-info-bg: var(--info-bg);
-  --font-voice: ui-serif, 'Iowan Old Style', Georgia, serif;
+  --font-voice: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  --font-sans: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  --radius-xs: 0;
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --radius-xl: 0;
+  --radius-2xl: 0;
+  --radius-3xl: 0;
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-lg: none;
+  --shadow-xl: none;
+  --shadow-2xl: none;
 }
 
 :root {
-  --page: #faf9f5;
-  --panel: #f3f1ea;
-  --raised: #ffffff;
-  --line: rgb(31 30 29 / 0.12);
-  --line-strong: rgb(31 30 29 / 0.24);
-  --ink: #1f1e1d;
-  --muted: #5e5d59;
-  --faint: #8f8e88;
-  --hover: rgb(31 30 29 / 0.05);
-  --selected: rgb(31 30 29 / 0.08);
-  --clay: #c96442;
+  /* Estilo brutalista, como El Crisol: negro, blanco y rojo puro; letra monoespaciada y esquinas rectas. */
+  --page: #000000;
+  --panel: #050505;
+  --raised: #0a0a0a;
+  --line: #262626;
+  --line-strong: #404040;
+  --ink: #ffffff;
+  --muted: #b3b3b3;
+  --faint: #7a7a7a;
+  --hover: rgb(255 255 255 / 0.06);
+  --selected: rgb(255 255 255 / 0.1);
+  --clay: #ff0000;
   --clay-ink: #ffffff;
-  --accent: #2f6fb3;
-  --danger: #a32d2d;
-  --danger-bg: #fcebeb;
-  --warning: #854f0b;
-  --warning-bg: #faeeda;
-  --success: #3b6d11;
-  --success-bg: #eaf3de;
-  --info-bg: #e6f1fb;
-  color-scheme: light;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --page: #1f1e1d;
-    --panel: #262624;
-    --raised: #30302e;
-    --line: rgb(250 249 245 / 0.1);
-    --line-strong: rgb(250 249 245 / 0.2);
-    --ink: #f5f4ef;
-    --muted: #b7b5ad;
-    --faint: #85837c;
-    --hover: rgb(250 249 245 / 0.06);
-    --selected: rgb(250 249 245 / 0.1);
-    --clay: #d97757;
-    --accent: #85b7eb;
-    --danger: #f09595;
-    --danger-bg: #501313;
-    --warning: #fac775;
-    --warning-bg: #412402;
-    --success: #97c459;
-    --success-bg: #173404;
-    --info-bg: #042c53;
-    color-scheme: dark;
-  }
+  --accent: #ff3b3b;
+  --danger: #ff4d4d;
+  --danger-bg: #2a0000;
+  --warning: #ffb020;
+  --warning-bg: #2a1c00;
+  --success: #3ddc84;
+  --success-bg: #00240f;
+  --info-bg: #1a1a1a;
+  --glow: 0 0 18px rgb(255 0 0 / 0.55);
+  color-scheme: dark;
 }
 
 html,
@@ -83,8 +76,8 @@ body {
   margin: 0;
   background: var(--page);
   color: var(--ink);
-  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
-  font-size: 14px;
+  font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  font-size: 13px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
@@ -112,8 +105,21 @@ body {
 }
 
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--clay);
   outline-offset: 1px;
+}
+
+/* Títulos gruesos y apretados; el rojo brilla como en El Crisol. */
+h1 {
+  font-weight: 700 !important;
+  letter-spacing: -0.03em !important;
+}
+.text-clay {
+  text-shadow: var(--glow);
+}
+::selection {
+  background: var(--clay);
+  color: #fff;
 }
 
 /* Editor de notas (TipTap) */
@@ -167,7 +173,7 @@ body {
 }
 .tiptap code {
   background: var(--hover);
-  border-radius: 4px;
+  border-radius: 0;
   padding: 0.1em 0.3em;
   font-size: 0.9em;
 }
