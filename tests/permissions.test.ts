@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { decideToolMode, isReadOnlyTool, parsePermissions, stepEffect } from '@shared/permissions'
+import { decideToolMode, isReadOnlyTool, parsePermissions } from '@shared/permissions'
 
 const FLOW = `# Cómo trabajo
 
@@ -38,7 +38,17 @@ describe('isReadOnlyTool', () => {
     expect(isReadOnlyTool('mcp__slack__send_message')).toBe(false)
     expect(isReadOnlyTool('mcp__jira__transition_issue')).toBe(false)
     expect(isReadOnlyTool('mcp__gmail__create_draft')).toBe(false)
-    expect(isReadOnlyTool('mcp__x__do_thing')).toBe(false)
+    // Sin verbo de escribir o enviar, se considera consultar: no te pide OK.
+    expect(isReadOnlyTool('mcp__x__do_thing')).toBe(true)
+    expect(isReadOnlyTool('mcp__supabase__execute_sql')).toBe(false)
+  })
+
+  it('reconoce las herramientas de Claude Code', () => {
+    for (const t of ['Read', 'Grep', 'Glob', 'WebSearch', 'WebFetch', 'Skill']) expect(isReadOnlyTool(t)).toBe(true)
+    for (const t of ['Bash', 'Write', 'Edit']) expect(isReadOnlyTool(t)).toBe(false)
+    expect(decideToolMode('Bash', []).mode).toBe('ask')
+    expect(decideToolMode('Bash', parsePermissions('## Permisos\n- bash: automático')).mode).toBe('auto')
+    expect(decideToolMode('WebSearch', []).mode).toBe('auto')
   })
 })
 
@@ -93,17 +103,3 @@ describe('conexiones de la cuenta de claude.ai', () => {
   })
 })
 
-describe('qué pasará con cada paso del plan', () => {
-  const rules = parsePermissions('## Permisos\n- gmail: solo borrador\n- jira: automático\n- slack: prohibido\n')
-  it('consultar y lo de la app se hacen solos', () => {
-    expect(stepEffect('read', 'Slack', rules)).toBe('auto')
-    expect(stepEffect('app', null, rules)).toBe('auto')
-  })
-  it('escribir sigue tus permisos y, sin regla, pide OK', () => {
-    expect(stepEffect('write', 'Gmail', rules)).toBe('draft')
-    expect(stepEffect('write', 'Jira', rules)).toBe('auto')
-    expect(stepEffect('write', 'Slack', rules)).toBe('deny')
-    expect(stepEffect('write', 'Google Drive', rules)).toBe('ask')
-    expect(stepEffect('write', 'Jira', rules, { draftsOnly: true })).toBe('draft')
-  })
-})

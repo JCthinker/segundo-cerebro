@@ -45,8 +45,17 @@ const READ_WORDS = new Set([
 const WRITE_WORDS = new Set([
   'send', 'post', 'create', 'update', 'delete', 'remove', 'write', 'edit', 'add', 'move',
   'transition', 'assign', 'archive', 'reply', 'forward', 'upload', 'set', 'trash', 'cancel',
-  'comment', 'react', 'invite', 'share', 'merge', 'close', 'publish', 'schedule', 'draft'
+  'comment', 'react', 'invite', 'share', 'merge', 'close', 'publish', 'schedule', 'draft',
+  'execute', 'exec', 'run', 'apply', 'deploy', 'import', 'insert', 'patch', 'put', 'submit',
+  'approve', 'reject', 'pay', 'transfer', 'rename', 'copy', 'restore', 'label', 'mark', 'spam',
+  'toggle', 'enable', 'disable', 'stop', 'start', 'pause', 'resolve', 'link', 'convert',
+  'duplicate', 'spawn', 'install', 'clear', 'reset', 'save', 'modify', 'change', 'unlabel', 'untrash', 'book'
 ])
+
+/** Herramientas propias de Claude Code que solo miran: leer archivos, buscar, consultar internet, usar skills. */
+const BUILTIN_READ = new Set(['Read', 'Glob', 'Grep', 'LS', 'WebSearch', 'WebFetch', 'Skill', 'ToolSearch', 'TodoWrite', 'BashOutput', 'ListMcpResourcesTool', 'ReadMcpResourceTool'])
+/** Herramientas propias de Claude Code que cambian cosas en tu ordenador: ejecutar órdenes y escribir archivos. */
+const BUILTIN_WRITE = new Set(['Bash', 'Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'KillShell', 'KillBash'])
 
 function words(name: string): string[] {
   return name
@@ -56,11 +65,21 @@ function words(name: string): string[] {
     .filter(Boolean)
 }
 
-/** Una herramienta es de lectura si su nombre tiene un verbo de lectura y ninguno de escritura. */
+/**
+ * ¿Solo mira? Las de Claude Code se conocen por su nombre. Las demás, por los verbos del nombre:
+ * con un verbo de escribir o enviar no lo es; si no, se considera lectura (consultar es libre).
+ */
 export function isReadOnlyTool(toolName: string): boolean {
+  if (BUILTIN_READ.has(toolName)) return true
+  if (BUILTIN_WRITE.has(toolName)) return false
   const w = words(shortToolName(toolName))
   if (w.some((x) => WRITE_WORDS.has(x))) return false
-  return w.some((x) => READ_WORDS.has(x))
+  return true
+}
+
+/** ¿Es una herramienta de Claude Code que cambia algo en tu ordenador? */
+export function isComputerTool(toolName: string): boolean {
+  return BUILTIN_WRITE.has(toolName)
 }
 
 export function serverOf(toolName: string): string | null {
@@ -113,21 +132,6 @@ function ruleMatches(pattern: string, toolName: string): boolean {
   if (!/[.*/_]/.test(p) && names.some((n) => p.toLowerCase().replace(/\s+/g, '_') === n.toLowerCase())) return true
   const re = globToRegex(p)
   return candidates.some((c) => re.test(c))
-}
-
-/**
- * Qué pasará con un paso del plan: consultar es automático; lo de dentro de la app (apuntar,
- * marcar como hecha) también; escribir o enviar en una herramienta sigue tus permisos.
- */
-export function stepEffect(
-  kind: 'read' | 'app' | 'write',
-  tool: string | null,
-  rules: PermissionRule[],
-  opts: { draftsOnly?: boolean } = {}
-): ToolMode {
-  if (kind === 'read' || kind === 'app') return 'auto'
-  const server = serverKey((tool ?? 'herramienta').trim()).replace(/_+/g, '_') || 'herramienta'
-  return decideToolMode(`mcp__${server}__send`, rules, opts).mode
 }
 
 const MODE_RANK: Record<ToolMode, number> = { auto: 0, ask: 1, draft: 2, deny: 3 }

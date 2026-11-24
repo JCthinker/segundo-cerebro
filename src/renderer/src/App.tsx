@@ -4,7 +4,7 @@ import { call, useData, useEvent } from './api'
 import { NavContext, type Page } from './nav'
 import { ApprovalHost } from './components/ApprovalHost'
 import { ItemEditor } from './components/ItemEditor'
-import { ResolvePanel } from './components/ResolvePanel'
+import { ChatPanel, type Incoming } from './components/ChatPanel'
 import { UpdateBanner } from './components/UpdateBanner'
 import { Icon } from './components/ui'
 import { Onboarding } from './Onboarding'
@@ -32,7 +32,13 @@ const isSettings = (p: Page) => SETTINGS_TABS.some((t) => t.page === p)
 export function App() {
   const [page, setPage] = useState<Page>('today')
   const [param, setParam] = useState<string | null>(null)
-  const [resolving, setResolving] = useState<{ item: Item | null; goal?: string } | null>(null)
+  // La conversación con Claude, en el panel de la derecha. «key» cambia al empezar una nueva.
+  const [chat, setChat] = useState<{ item: Item | null; goal?: string; key: number } | null>(null)
+  const [incoming, setIncoming] = useState<Incoming | null>(null)
+  const newChat = (item: Item | null, goal?: string) => {
+    setIncoming(null)
+    setChat({ item, goal, key: Date.now() })
+  }
   const [editing, setEditing] = useState<{ item: Item | null; defaults?: Partial<Item> } | null>(null)
   const [ai, setAi] = useState<AiStatus | null>(null)
   const { data: settings, reload: reloadSettings } = useData<S & { shortcut: string | null }>('settings.get', [], ['settings'])
@@ -69,7 +75,11 @@ export function App() {
     page,
     param,
     go,
-    resolve: (item: Item | null, goal?: string) => setResolving({ item, goal }),
+    resolve: newChat,
+    talk: (text: string) => {
+      if (!chat) setChat({ item: null, key: Date.now() })
+      setIncoming({ text, n: Date.now() })
+    },
     editItem: (item: Item | null, defaults?: Partial<Item>) => setEditing({ item, defaults })
   }
 
@@ -96,10 +106,10 @@ export function App() {
           </nav>
           <div className="no-drag mt-auto space-y-0.5">
             <button
-              onClick={() => setResolving({ item: null })}
-              className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13.5px] text-muted hover:bg-hover hover:text-ink"
+              onClick={() => (chat ? setChat(null) : newChat(null))}
+              className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13.5px] ${chat ? 'bg-selected text-ink' : 'text-muted hover:bg-hover hover:text-ink'}`}
             >
-              <Icon name="sparkles" className="text-clay" /> Pedir algo a Claude
+              <Icon name="sparkles" className="text-clay" /> Hablar con Claude
             </button>
             <button
               onClick={() => go('settings')}
@@ -147,9 +157,20 @@ export function App() {
             {page === 'settings' && <Settings ai={ai} onAi={setAi} />}
           </div>
         </main>
+
+        {chat ? (
+          <ChatPanel
+            key={chat.key}
+            item={chat.item}
+            initialGoal={chat.goal}
+            incoming={incoming}
+            onClose={() => setChat(null)}
+            onNew={() => newChat(null)}
+          />
+        ) : null}
       </div>
 
-      {resolving ? <ResolvePanel item={resolving.item} initialGoal={resolving.goal} onClose={() => setResolving(null)} /> : null}
+
       {editing ? <ItemEditor item={editing.item} defaults={editing.defaults} onClose={() => setEditing(null)} /> : null}
       <ApprovalHost />
     </NavContext.Provider>

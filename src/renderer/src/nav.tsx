@@ -7,7 +7,10 @@ export interface Nav {
   page: Page
   go: (page: Page, param?: string) => void
   param: string | null
+  /** Abre una conversación nueva con Claude (sobre una tarea, si se da). */
   resolve: (item: Item | null, goal?: string) => void
+  /** Le manda un mensaje a Claude en el panel de la derecha (lo abre si hace falta). */
+  talk: (text: string) => void
   editItem: (item: Item | null, defaults?: Partial<Item>) => void
 }
 

@@ -112,7 +112,7 @@ export interface ApprovalRequest {
 
 export interface RunLogEntry {
   at: string
-  type: 'text' | 'tool' | 'approved' | 'denied' | 'draft' | 'result' | 'error' | 'plan'
+  type: 'user' | 'text' | 'tool' | 'approved' | 'denied' | 'draft' | 'result' | 'error' | 'plan'
   text: string
   toolName?: string
   input?: unknown
@@ -120,26 +120,6 @@ export interface RunLogEntry {
   byUser?: boolean
   /** En «plan»: los pasos que propuso Claude. */
   steps?: string[]
-}
-
-/** Lo que va a pasar si le das a «Hazlo»: Claude lo prepara antes de actuar. */
-export interface PlanStep {
-  /** Frase llana: «Leer el hilo de Slack con Marta». */
-  text: string
-  tool: string | null
-  kind: 'read' | 'app' | 'write'
-  /** Qué pasará con este paso según tus permisos. */
-  effect: ToolMode
-}
-
-export interface ResolvePlan {
-  /** Una frase: qué conseguirá. */
-  summary: string
-  steps: PlanStep[]
-  /** Lo que Claude necesita saber de ti antes de empezar, si falta algo. */
-  question: string | null
-  /** Registro del encargo en el historial (se reutiliza si rehaces el plan o le das a «Hazlo»). */
-  requestId?: string
 }
 
 export interface ActionRun {

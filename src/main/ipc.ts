@@ -4,7 +4,7 @@ import { addDays, toDay } from '@shared/dates'
 import { rankItems, scoreItem } from '@shared/priority'
 import { toggleCheck } from '@shared/plan'
 import { buildHistory } from '@shared/history'
-import type { ResolvePlan, TodayView } from '@shared/types'
+import type { TodayView } from '@shared/types'
 import * as db from './db'
 import { dataChanged } from './events'
 import { getSettings, updateSettings } from './settings'
@@ -14,8 +14,7 @@ import { connectorLabel, listClaudeConnectors } from './agent/connectors'
 import { parsePermissions } from '@shared/permissions'
 import { dayRange, generateBrief } from './agent/brief'
 import { extractToInbox } from './agent/extract'
-import { cancelRun, planResolve, startResolve } from './agent/resolve'
-import { ask, type ChatMessage } from './agent/ask'
+import { chatClose, chatSend, chatStart, chatStop } from './agent/chat'
 import { claudeUsage } from './agent/usage'
 import { answerApproval } from './agent/permissions-gate'
 import { appendToSection, suggestRules } from './agent/suggest-rules'
@@ -258,15 +257,14 @@ const api: Record<string, (...args: any[]) => unknown> = {
   },
 
   // resolver y preguntar
-  'resolve.plan': (itemId: string | null, goal: string, mode: 'normal' | 'drafts', requestId?: string | null) =>
-    withAi(() => planResolve(itemId, goal, mode, requestId)),
-  'resolve.start': (itemId: string | null, goal: string, mode: 'normal' | 'drafts', plan?: ResolvePlan | null) => startResolve(itemId, goal, mode, plan),
-  'resolve.cancel': (runId: string) => cancelRun(runId),
+  'chat.start': (itemId: string | null, text: string, drafts: boolean) => chatStart(itemId, text, drafts),
+  'chat.send': (runId: string, text: string, drafts: boolean) => chatSend(runId, text, drafts),
+  'chat.stop': (runId: string) => chatStop(runId),
+  'chat.close': (runId: string) => chatClose(runId),
   'runs.list': () => db.listRuns(),
   'history.get': () => buildHistory(db.listItems({ status: ['done', 'dismissed'] }), db.listRuns(1000)),
   'runs.get': (id: string) => db.getRun(id),
-  'approvals.answer': (id: string, approved: boolean) => answerApproval(id, approved),
-  ask: (history: ChatMessage[]) => withAi(() => ask(history)),
+  'approvals.answer': (id: string, approved: boolean, always?: boolean) => answerApproval(id, approved, !!always),
 
   'shell.open': (url: string) => {
     if (/^https?:\/\//.test(url)) void shell.openExternal(url)

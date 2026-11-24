@@ -29,8 +29,20 @@ const NOUNS: [RegExp, string][] = [
   [/task/, 'una tarea']
 ]
 
+/** Herramientas de Claude Code que cambian algo en tu ordenador, dichas en llano. */
+const COMPUTER: Record<string, string> = {
+  Bash: 'Ejecutar una orden',
+  Write: 'Crear o reescribir un archivo',
+  Edit: 'Editar un archivo',
+  MultiEdit: 'Editar un archivo',
+  NotebookEdit: 'Editar un cuaderno',
+  KillShell: 'Parar una orden',
+  KillBash: 'Parar una orden'
+}
+
 /** «send_message» → «Enviar un mensaje». */
 export function toolAction(toolName: string): { verb: string; read: boolean } {
+  if (COMPUTER[toolName]) return { verb: COMPUTER[toolName], read: false }
   const short = shortToolName(toolName).toLowerCase()
   const verb = VERBS.find(([re]) => re.test(short))?.[1]
   const noun = NOUNS.find(([re]) => re.test(short))?.[1]
@@ -42,6 +54,7 @@ const FIELD: Record<string, string> = {
   to: 'Para', recipient: 'Para', recipients: 'Para', cc: 'Copia', bcc: 'Copia oculta',
   subject: 'Asunto', title: 'Título', summary: 'Resumen',
   body: 'Texto', text: 'Texto', message: 'Mensaje', content: 'Contenido', description: 'Descripción',
+  command: 'Orden', file_path: 'Archivo', path: 'Ruta', old_string: 'Texto actual', new_string: 'Texto nuevo',
   channel: 'Canal', channel_id: 'Canal', thread_ts: 'Hilo', project: 'Proyecto', issue: 'Ticket', issueKey: 'Ticket'
 }
 

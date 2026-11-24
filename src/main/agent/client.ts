@@ -1,5 +1,6 @@
 import { app } from 'electron'
 import { join } from 'node:path'
+import { homedir } from 'node:os'
 import { query, type CanUseTool, type EffortLevel, type McpServerConfig, type Query, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
 import type { AiStatus } from '@shared/types'
 import { serverKey } from '@shared/permissions'
@@ -137,6 +138,106 @@ export async function runAgent(o: RunAgentOptions): Promise<RunAgentResult> {
   } finally {
     finish()
     if (allowed.length) q.close()
+  }
+}
+
+export interface SessionOptions {
+  system: string
+  mcpServers?: Record<string, McpServerConfig>
+  canUseTool: CanUseTool
+  connectors?: 'enabled' | string[]
+  tier?: ModelTier
+  effort?: EffortLevel
+  /** Carpeta desde la que trabaja (por defecto, tu carpeta personal). */
+  cwd?: string
+}
+
+export interface AgentSession {
+  q: Query
+  /** Le manda un mensaje: si está trabajando, lo lee al terminar el paso en curso. */
+  send(text: string): void
+  /** Termina la conversación (no queda guardada en Claude Code). */
+  close(): void
+}
+
+/**
+ * Una conversación viva con Claude, como en la app de Claude: le escribes, trabaja, le contestas y
+ * sigue donde estaba. Tiene las herramientas de Claude Code (tu ordenador, internet, tus skills),
+ * siempre pasando por tus permisos.
+ */
+export async function openSession(o: SessionOptions): Promise<AgentSession> {
+  const s = getSettings()
+  const env = agentEnv()
+  const usable = s.aiMode === 'claude-code' && o.connectors?.length ? await enabledConnectorNames(env) : []
+  const allowed = o.connectors === 'enabled' ? usable : (o.connectors ?? []).filter((n) => usable.includes(n))
+  if (!allowed.length) env.ENABLE_CLAUDEAI_MCP_SERVERS = 'false'
+  const disallowedTools = knownConnectorNames()
+    .filter((n) => !allowed.includes(n))
+    .map((n) => `mcp__${serverKey(n)}`)
+  const canUseTool: CanUseTool = async (name, input, ctx) =>
+    isConnectorTool(name) && !connectorToolAllowed(name, allowed)
+      ? { behavior: 'deny', message: 'Esa conexión no está activada para la app.' }
+      : o.canUseTool(name, input, ctx)
+
+  const inbox: SDKUserMessage[] = []
+  let wake: (() => void) | null = null
+  let closed = false
+  let start: () => void = () => undefined
+  const started = new Promise<void>((r) => (start = r))
+  async function* input(): AsyncGenerator<SDKUserMessage> {
+    await started
+    while (!closed) {
+      const next = inbox.shift()
+      if (next) yield next
+      else await new Promise<void>((r) => (wake = r))
+    }
+  }
+  const poke = () => {
+    const w = wake
+    wake = null
+    w?.()
+  }
+
+  const q = query({
+    prompt: input(),
+    options: {
+      model: modelFor(o.tier ?? 'strong', s),
+      systemPrompt: { type: 'preset', preset: 'claude_code', append: o.system },
+      tools: { type: 'preset', preset: 'claude_code' },
+      skills: 'all',
+      mcpServers: o.mcpServers ?? {},
+      canUseTool,
+      disallowedTools,
+      permissionMode: 'default',
+      settingSources: ['user'],
+      persistSession: false,
+      cwd: o.cwd ?? homedir(),
+      maxTurns: 200,
+      effort: o.effort ?? 'high',
+      env,
+      ...claudeExecutable()
+    }
+  })
+
+  if (allowed.length) {
+    try {
+      await waitForConnectors(q, allowed)
+    } finally {
+      start()
+    }
+  } else start()
+
+  return {
+    q,
+    send(text) {
+      inbox.push({ type: 'user', message: { role: 'user', content: text }, parent_tool_use_id: null })
+      poke()
+    },
+    close() {
+      closed = true
+      poke()
+      q.close()
+    }
   }
 }
 

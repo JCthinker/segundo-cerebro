@@ -1,17 +1,19 @@
 import type { CanUseTool } from '@anthropic-ai/claude-agent-sdk'
 import { randomUUID } from 'node:crypto'
-import { decideToolMode, parsePermissions, serverLabel, serverOf, shortToolName } from '@shared/permissions'
+import { decideToolMode, isComputerTool, parsePermissions, serverLabel, serverOf, shortToolName } from '@shared/permissions'
 import type { ApprovalRequest, RunLogEntry } from '@shared/types'
 import * as db from '../db'
 import { emit } from '../events'
 
-const pending = new Map<string, (approved: boolean) => void>()
+type Answer = { approved: boolean; always: boolean }
+const pending = new Map<string, (a: Answer) => void>()
 
-export function answerApproval(id: string, approved: boolean): void {
+/** always = «Sí, y no vuelvas a preguntarme esto en esta conversación». */
+export function answerApproval(id: string, approved: boolean, always = false): void {
   const resolve = pending.get(id)
   if (resolve) {
     pending.delete(id)
-    resolve(approved)
+    resolve({ approved, always: approved && always })
   }
 }
 
@@ -24,15 +26,26 @@ export function pendingApprovals(): string[] {
  * automático → se ejecuta; requiere OK → tarjeta de aprobación; borrador → no se ejecuta y
  * Claude debe dejar el contenido redactado; prohibido → no se ejecuta.
  */
-export function makeGate(runId: string, opts: { draftsOnly: boolean; log: (e: RunLogEntry) => void }): CanUseTool {
+export function makeGate(
+  runId: string,
+  opts: { draftsOnly: boolean | (() => boolean); log: (e: RunLogEntry) => void }
+): CanUseTool {
   const rules = parsePermissions(db.getWorkflow().markdown)
+  /** Lo que ya has dicho «sí, siempre» en esta conversación. */
+  const always = new Set<string>()
   return async (toolName, input, { signal }) => {
-    const { mode, reason } = decideToolMode(toolName, rules, { draftsOnly: opts.draftsOnly })
+    const draftsOnly = typeof opts.draftsOnly === 'function' ? opts.draftsOnly() : opts.draftsOnly
+    const { mode, reason } = decideToolMode(toolName, rules, { draftsOnly })
     const at = new Date().toISOString()
     const server = serverOf(toolName)
-    const label = `${server ? serverLabel(server) : 'claude'} · ${shortToolName(toolName)}`
+    const where = server ? serverLabel(server) : isComputerTool(toolName) ? 'tu ordenador' : 'Claude'
+    const label = `${where} · ${shortToolName(toolName)}`
 
     if (mode === 'auto') return { behavior: 'allow', updatedInput: input }
+    if (mode === 'ask' && always.has(toolName)) {
+      opts.log({ at, type: 'approved', text: `${label}: aprobado (siempre en esta conversación)`, toolName, input })
+      return { behavior: 'allow', updatedInput: input }
+    }
 
     if (mode === 'deny') {
       opts.log({ at, type: 'denied', text: `${label}: prohibido (${reason})`, toolName, input })
@@ -49,14 +62,15 @@ export function makeGate(runId: string, opts: { draftsOnly: boolean; log: (e: Ru
     }
 
     // mode === 'ask'
-    const req: ApprovalRequest = { id: randomUUID(), runId, toolName, serverName: server ? serverLabel(server) : null, input }
-    const approved = await new Promise<boolean>((resolve) => {
+    const req: ApprovalRequest = { id: randomUUID(), runId, toolName, serverName: where === 'Claude' ? null : where, input }
+    const answer = await new Promise<Answer>((resolve) => {
       pending.set(req.id, resolve)
       signal.addEventListener('abort', () => answerApproval(req.id, false), { once: true })
       emit('approval-request', req)
     })
     emit('approval-closed', req.id)
-    if (approved) {
+    if (answer.always) always.add(toolName)
+    if (answer.approved) {
       opts.log({ at: new Date().toISOString(), type: 'approved', text: `${label}: aprobado`, toolName, input })
       return { behavior: 'allow', updatedInput: input }
     }

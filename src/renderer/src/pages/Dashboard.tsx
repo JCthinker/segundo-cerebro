@@ -5,8 +5,7 @@ import { isDone, planDays, todayIds, type DayPlan, type PlanEntry } from '@share
 import { call, useAction, useData } from '../api'
 import { DismissButton } from '../components/Dismiss'
 import { CheckButton, ItemRow, SourceLine } from '../components/ItemRow'
-import { Markdown } from '../components/Markdown'
-import { Button, Card, ErrorNote, Icon, inputCls, Pill, SectionLabel, Spinner, textareaCls } from '../components/ui'
+import { Button, Card, ErrorNote, Icon, inputCls, Pill, SectionLabel, textareaCls } from '../components/ui'
 import { useNav } from '../nav'
 
 const time = (iso: string) => new Date(iso).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
@@ -139,34 +138,31 @@ export function Dashboard({ ai, shortcut }: { ai: AiStatus | null; shortcut: str
   )
 }
 
-/** Una sola caja para apuntar algo (Claude lo convierte en tareas) o para preguntar. */
+/**
+ * Una sola caja para hablar con Claude: lo que escribes va a la conversación de la derecha,
+ * donde te contesta qué ha apuntado, qué ha hecho o qué necesita saber.
+ */
 function QuickBox({ ai, shortcut }: { ai: AiStatus | null; shortcut: string | null }) {
+  const { talk } = useNav()
   const [text, setText] = useState('')
   const [title, setTitle] = useState('')
   const [transcript, setTranscript] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
-  const [answer, setAnswer] = useState<{ q: string; a: string | null } | null>(null)
   const noAi = ai?.ok === false
 
+  const send = () => {
+    const said = text.trim()
+    if (!said) return
+    talk(said)
+    setText('')
+    setMsg(null)
+  }
   const note = useAction(async () => {
-    if (!text.trim()) throw new Error('Escribe o pega algo primero.')
-    const n = transcript ? await call<number>('transcript', text, title) : await call<number>('capture', text)
-    setMsg(n ? `${plural(n, 'cosa apuntada', 'cosas apuntadas')} en tu lista.` : 'No he encontrado nada que hacer en ese texto.')
+    if (!text.trim()) throw new Error('Pega el acta primero.')
+    const n = await call<number>('transcript', text, title)
+    setMsg(n ? `${plural(n, 'cosa apuntada', 'cosas apuntadas')} en tu lista.` : 'No he encontrado nada que hacer en esa acta.')
     setText('')
     setTitle('')
-  })
-  const askIt = useAction(async () => {
-    const q = text.trim()
-    if (!q) throw new Error('Escribe una pregunta.')
-    setAnswer({ q, a: null })
-    setText('')
-    try {
-      setAnswer({ q, a: await call<string>('ask', [{ role: 'user', text: q }]) })
-    } catch (e) {
-      setAnswer(null)
-      setText(q)
-      throw e
-    }
   })
   const fromFile = useAction(async () => {
     const n = await call<number | null>('file.import')
@@ -185,14 +181,17 @@ function QuickBox({ ai, shortcut }: { ai: AiStatus | null; shortcut: string | nu
           setMsg(null)
         }}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void note.run()
+          if (e.key === 'Enter' && !e.shiftKey && !transcript) {
+            e.preventDefault()
+            send()
+          }
         }}
         placeholder={
           noAi
-            ? 'Conecta Claude en Ajustes para apuntar o preguntar'
+            ? 'Conecta Claude en Ajustes para hablar con él'
             : transcript
               ? 'Pega aquí el acta o la transcripción'
-              : 'Apunta algo («le dije a Ana que el jueves le mando el informe») o pregunta («¿qué tengo que preparar para mañana?»)'
+              : 'Dile algo a Claude: «le dije a Ana que el jueves le mando el informe», «¿qué tengo que preparar para mañana?», «avisa a Luis por Slack»…'
         }
       />
       <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -204,39 +203,21 @@ function QuickBox({ ai, shortcut }: { ai: AiStatus | null; shortcut: string | nu
           <Icon name="file" className="mr-1 inline h-3.5 w-3.5" />
           {fromFile.busy ? 'Analizando…' : 'Analizar un archivo'}
         </button>
-        <span className="text-[11.5px] text-faint">⌘ Enter para apuntar{shortcut ? ` · Desde cualquier app: ${shortcut}` : ''}</span>
+        <span className="text-[11.5px] text-faint">{transcript ? '' : 'Intro para enviar'}{shortcut ? `${transcript ? '' : ' · '}Desde cualquier app: ${shortcut}` : ''}</span>
         <div className="ml-auto flex gap-1.5">
-          {!transcript ? (
-            <Button variant="ghost" busy={askIt.busy} disabled={noAi || !text.trim()} onClick={() => askIt.run()}>
-              <Icon name="chat" /> Preguntar
+          {transcript ? (
+            <Button variant="claude" busy={note.busy} disabled={noAi || !text.trim()} onClick={() => note.run()}>
+              <Icon name="sparkles" /> Sacar tareas del acta
             </Button>
-          ) : null}
-          <Button variant="claude" busy={note.busy} disabled={noAi || !text.trim()} onClick={() => note.run()}>
-            <Icon name="sparkles" /> Apuntar
-          </Button>
-        </div>
-      </div>
-      <ErrorNote>{note.error || askIt.error || fromFile.error}</ErrorNote>
-      {msg ? <p className="mt-2 px-1 text-[13px] text-success">{msg}</p> : null}
-      {answer ? (
-        <div className="mt-3 rounded-lg bg-panel px-4 py-3">
-          <div className="mb-1 flex items-center gap-2 text-[12.5px] font-medium text-muted">
-            <span className="flex-1">{answer.q}</span>
-            <button className="text-faint hover:text-ink" onClick={() => setAnswer(null)} aria-label="Cerrar respuesta">
-              <Icon name="x" className="h-3.5 w-3.5" />
-            </button>
-          </div>
-          {answer.a === null ? (
-            <div className="flex items-center gap-2 text-[13px] text-muted">
-              <Spinner /> Buscando en tu contexto…
-            </div>
           ) : (
-            <div className="font-voice text-[15px] leading-relaxed">
-              <Markdown text={answer.a} />
-            </div>
+            <Button variant="claude" disabled={noAi || !text.trim()} onClick={send}>
+              <Icon name="arrow" /> Enviar a Claude
+            </Button>
           )}
         </div>
-      ) : null}
+      </div>
+      <ErrorNote>{note.error || fromFile.error}</ErrorNote>
+      {msg ? <p className="mt-2 px-1 text-[13px] text-success">{msg}</p> : null}
     </Card>
   )
 }

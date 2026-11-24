@@ -7,7 +7,7 @@ App de escritorio en la que tomar notas es solo una de las entradas de un asiste
 - **qué entregas se acercan**, teniendo en cuenta el tiempo que necesitas para prepararlas,
 - **qué tienes que preparar** antes de cada reunión.
 
-Y puede **resolver trabajo** en tus herramientas (mover un ticket, escribir en Slack, preparar un correo) con los permisos que tú decidas.
+Y tiene una **conversación con Claude** en un panel a la derecha, como en la app de Claude: le pides algo, le cuentas algo para que lo apunte o le preguntas, y siempre te contesta qué ha hecho o qué necesita. Puede usar tus herramientas (mover un ticket, escribir en Slack, preparar un correo), tu ordenador, internet y tus skills de Claude Code, con los permisos que tú decidas.
 
 Todo se rige por **Mi flujo**: una página viva que escribes tú, con tus prioridades, reglas, personas clave y permisos, y que Claude lee como si fuera un skill. Se puede exportar como `SKILL.md`.
 
@@ -15,7 +15,8 @@ Todo se rige por **Mi flujo**: una página viva que escribes tú, con tus priori
 
 | Pantalla | Qué hace |
 | --- | --- |
-| **Dashboard** | La pantalla principal: lo atrasado, lo de hoy (por prioridad) con tus reuniones, y una tarjeta por cada uno de los próximos 6 días. Cada cosa aparece el día en que tienes que **empezarla** (fecha límite menos días de preparación). Debajo: lo nuevo que ha detectado Claude para confirmar, lo de más adelante y lo que no tiene fecha. Arriba, una caja para apuntar algo o preguntar. |
+| **Dashboard** | La pantalla principal: lo atrasado, lo de hoy (por prioridad) con tus reuniones, y una tarjeta por cada uno de los próximos 6 días. Cada cosa aparece el día en que tienes que **empezarla** (fecha límite menos días de preparación). Debajo: lo nuevo que ha detectado Claude para confirmar, lo de más adelante y lo que no tiene fecha. Arriba, una caja para hablar con Claude: lo que escribes va a la conversación de la derecha. |
+| **Historial** | Por días: lo que has completado o descartado, lo que pediste a Claude, lo que hizo y lo que le rechazaste. |
 | **Notas** | Editor de bloques. Mientras escribes, Claude detecta lo que tienes que hacer y te lo propone en el dashboard. |
 | **Notas** | Tus notas, y arriba del todo **Mi flujo**: una página fija (se edita, no se borra) con tus reglas, historial y exportación como skill. |
 | **Ajustes** | Dos pestañas: General (Claude, áreas, brief) y **Entradas** (calendarios, archivos, herramientas y registro). |
@@ -47,7 +48,7 @@ En Mi flujo, sección `## Permisos`, una línea por herramienta:
 
 Las conexiones de tu cuenta de claude.ai (Gmail, Google Drive, Notion…) se usan con su nombre: `gmail`, `google drive`. «Solo borrador» deja leer y crear borradores (por ejemplo, en Gmail), pero no enviar.
 
-Sin regla, leer es automático y escribir requiere tu OK. Las acciones que requieren OK aparecen como tarjetas de aprobación. «Solo borradores» prepara todo sin enviar nada. Todo queda registrado.
+Sin regla, leer y buscar es automático, y escribir, enviar o cambiar algo requiere tu OK. Lo mismo en tu ordenador: leer archivos es libre; ejecutar órdenes (`bash`) o escribir archivos (`write`, `edit`) te pide OK, salvo que pongas, por ejemplo, `- bash: automático`. Las acciones que requieren OK aparecen dentro de la conversación, con «Sí», «No» y «Sí a todo esto» (no vuelve a preguntar lo mismo en esa conversación). «Solo borradores» prepara todo sin enviar nada. Todo queda en el Historial.
 
 ## Conexiones de tu cuenta de Claude
 
