@@ -6,6 +6,7 @@ import { dueLabel } from '@shared/plan'
 import { toDay } from '@shared/dates'
 import { call, useAction, useEvent } from '../api'
 import { inlineApprovalRuns, ToolInput, toolAction } from './ApprovalHost'
+import { Markdown } from './Markdown'
 import { Button, ErrorNote, Icon, Modal, Pill, Spinner, textareaCls } from './ui'
 
 /** Qué pasará con cada paso, dicho en llano. */
@@ -378,7 +379,9 @@ function RunView({ run, current, details, onDetails }: { run: ActionRun; current
       {result ? (
         <div className="rounded-xl bg-panel p-5">
           <div className="mb-1 text-[12px] font-medium text-muted">Qué ha hecho</div>
-          <div className="font-voice text-[15px] leading-relaxed whitespace-pre-wrap">{result.text}</div>
+          <div className="font-voice text-[15px] leading-relaxed">
+            <Markdown text={result.text} />
+          </div>
         </div>
       ) : null}
       {run.status === 'error' ? <ErrorNote>{[...run.log].reverse().find((e) => e.type === 'error')?.text ?? 'Algo ha fallado.'}</ErrorNote> : null}
