@@ -21,6 +21,7 @@ import { appendToSection, suggestRules } from './agent/suggest-rules'
 import { capture, connectorEventsSourceId, importFile, importTranscript, isCalendarConnector, syncConnectorCalendars, syncIcs, syncMcpSource } from './sources'
 import { shortcutLabel } from './shortcut'
 import { checkForUpdate, installNow, updateStatus } from './updater'
+import { getSnapshot, jiraConnector, jiraProjects, jiraSyncing, lastJiraError, syncJira } from './jira'
 
 /** Llamadas que usan la IA: anotan el estado de la conexión. */
 async function withAi<T>(fn: () => Promise<T>): Promise<T> {
@@ -88,6 +89,16 @@ const api: Record<string, (...args: any[]) => unknown> = {
     dataChanged('all')
     return true
   },
+
+  // jira
+  'jira.get': async () => ({
+    snapshot: getSnapshot(),
+    connector: await jiraConnector(),
+    syncing: jiraSyncing(),
+    error: lastJiraError(),
+    projects: jiraProjects()
+  }),
+  'jira.sync': () => syncJira().then(() => true),
 
   // hoy
   'today.get': () => todayView(),

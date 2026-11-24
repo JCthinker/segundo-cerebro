@@ -11,6 +11,7 @@ import { Onboarding } from './Onboarding'
 import { Dashboard } from './pages/Dashboard'
 import { Notes } from './pages/Notes'
 import { History } from './pages/History'
+import { Jira } from './pages/Jira'
 import { WORKFLOW_NOTE_ID } from './pages/Workflow'
 import { UsageMeter } from './components/UsageMeter'
 import { Sources } from './pages/Sources'
@@ -18,6 +19,7 @@ import { Settings } from './pages/Settings'
 
 const NAV: { page: Page; label: string; icon: Parameters<typeof Icon>[0]['name'] }[] = [
   { page: 'today', label: 'Dashboard', icon: 'sun' },
+  { page: 'jira', label: 'Jira', icon: 'route' },
   { page: 'notes', label: 'Notas', icon: 'notes' },
   { page: 'history', label: 'Historial', icon: 'history' }
 ]
@@ -151,6 +153,7 @@ export function App() {
               </div>
             ) : null}
             {page === 'today' && <Dashboard ai={ai} shortcut={settings.shortcut} />}
+            {page === 'jira' && <Jira />}
             {page === 'notes' && <Notes ai={ai} />}
             {page === 'history' && <History />}
             {page === 'sources' && <Sources ai={ai} />}

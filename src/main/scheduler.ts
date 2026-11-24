@@ -5,13 +5,19 @@ import { markAiFailure, markAiOk } from './agent/client'
 import { dataChanged } from './events'
 import { getSettings } from './settings'
 import { syncAllCalendars } from './sources'
+import { maybeSyncJira } from './jira'
 
 let briefRunning = false
 
-/** Mientras la app está abierta: brief matinal a la hora elegida y calendarios cada 30 minutos. */
+/** Mientras la app está abierta: brief matinal, calendarios cada 30 minutos y Jira cada 3 horas. */
 export function startScheduler(): void {
   void syncAllCalendars()
   setInterval(() => void syncAllCalendars(), 30 * 60_000)
+  const jira = () => {
+    if (getSettings().onboarded) void maybeSyncJira()
+  }
+  setTimeout(jira, 90_000)
+  setInterval(jira, 30 * 60_000)
   setInterval(() => void maybeMorningBrief(), 5 * 60_000)
   setTimeout(() => void maybeMorningBrief(), 20_000)
 }
