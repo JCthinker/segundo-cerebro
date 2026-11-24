@@ -1,6 +1,6 @@
 {
   "name": "segundo-cerebro",
-  "version": "0.1.26",
+  "version": "0.1.27",
   "description": "Segundo cerebro: notas, promesas, entregas y un asistente que prioriza y resuelve tu trabajo",
   "main": "out/main/index.js",
   "type": "module",
