@@ -63,6 +63,9 @@ export function JiraCustomize({ prefs, snap, onClose }: { prefs: JiraPrefs; snap
         <Field label="Leer solo lo que cumpla (opcional)" hint="Una condición de Jira, por ejemplo «team = Pagos» o «labels = growth». Vacío: todo el proyecto.">
           <input className={inputCls} value={p.filter} onChange={(e) => setP({ ...p, filter: e.target.value })} placeholder="team = Pagos" />
         </Field>
+        <Field label="Repartir en columnas según el campo" hint="El campo de tu Jira que dice en qué paso está cada iniciativa. Normalmente «Status».">
+          <input className={inputCls} value={p.columnField} onChange={(e) => setP({ ...p, columnField: e.target.value })} placeholder="Status" />
+        </Field>
         <div>
           <Field label="Ordenar las iniciativas por" hint="El nombre de un campo de tu Jira. Vacío: primero las del trimestre actual.">
             <div className="flex gap-2">
@@ -132,7 +135,7 @@ export function JiraCustomize({ prefs, snap, onClose }: { prefs: JiraPrefs; snap
       </div>
       <ErrorNote>{save.error}</ErrorNote>
       <div className="flex items-center justify-end gap-2 border-t border-line px-5 py-3">
-        <span className="mr-auto text-[12px] text-faint">Si cambias proyectos, filtro u orden, Claude vuelve a leer Jira.</span>
+        <span className="mr-auto text-[12px] text-faint">Si cambias proyectos, filtro, columnas u orden, Claude vuelve a leer Jira.</span>
         <Button variant="ghost" onClick={onClose}>
           Cancelar
         </Button>

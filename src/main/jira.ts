@@ -42,6 +42,7 @@ export function saveJiraPrefs(p: JiraPrefs): boolean {
     filter: p.filter.trim(),
     hidden: p.hidden,
     aliases: p.aliases,
+    columnField: (p.columnField ?? '').trim() || 'Status',
     sortField: (p.sortField ?? '').trim(),
     sortDesc: !!p.sortDesc,
     view: p.view === 'list' ? 'list' : 'board'
@@ -52,6 +53,7 @@ export function saveJiraPrefs(p: JiraPrefs): boolean {
     before.road !== clean.road ||
     before.fp !== clean.fp ||
     before.filter !== clean.filter ||
+    before.columnField !== clean.columnField ||
     before.sortField !== clean.sortField ||
     (!!clean.sortField && before.sortDesc !== clean.sortDesc)
   )
@@ -107,7 +109,7 @@ const SNAPSHOT_SCHEMA = {
         properties: {
           key: str,
           title: str,
-          status: { type: 'string', description: 'Nombre exacto del estado en Jira' },
+          status: { type: 'string', description: 'Valor exacto del campo de columnas que pide el sistema (Status por defecto)' },
           quarter: { ...strOrNull, description: 'Valor del campo Quarter, p. ej. «Q1 - 2027»' },
           url: strOrNull,
           developers: { type: 'array', items: str, description: 'Desarrolladores que participan (responsable u otros asignados)' },
@@ -155,7 +157,7 @@ const SNAPSHOT_SCHEMA = {
   }
 } as const
 
-function role(road: string, fp: string, filter = '', sortField = '', sortDesc = false): string {
+export function role(road: string, fp: string, filter = '', sortField = '', sortDesc = false, columnField = 'Status'): string {
   const dir = sortDesc ? 'DESC' : 'ASC'
   const order = sortField
     ? `ORDEN: devuelve las iniciativas de ${road} EXACTAMENTE en el orden que da Jira con «ORDER BY "${sortField}" ${dir}» (si ese campo no existe con ese nombre, busca el campo que más se le parezca, como Prioridad/Priority o Rank/Clasificación, y úsalo). Respeta ese orden en la lista "initiatives", también al paginar. En "sortValue" pon el valor de ese campo tal como lo muestra Jira.\n\n`
@@ -165,7 +167,7 @@ function role(road: string, fp: string, filter = '', sortField = '', sortDesc = 
 Tienes que devolver una copia resumida de dos proyectos:
 1. Proyecto ${road} (iniciativas de producto): todas las que no están en Done, y las que pasaron a Done en los últimos 120 días.
    Por ejemplo, con JQL: project = ${road} AND (statusCategory != Done OR updated >= -120d)
-   - "status": el nombre exacto del estado (Backlog 3, Backlog 2, Backlog, Discovery, Ready to refine, Ready to dev, WIP, Done…).
+   - "status": el valor EXACTO del campo llamado «${columnField}» de cada iniciativa (por ejemplo Backlog 3, Backlog 2, Backlog, Discovery, Ready to refine, Ready to dev, WIP, Done…). Usa ese campo y ningún otro: si en el ticket hay a la vez un campo «Estado» y otro «${columnField}», el bueno es «${columnField}». Si hay un campo personalizado con ese nombre exacto, usa ese; si no, el estado normal del ticket.
    - "quarter": el valor del campo personalizado llamado Quarter (formato «Q1 - 2027»), o null.
    - "developers": el responsable y cualquier desarrollador asignado o mencionado como participante en los campos del ticket.
    - "kpi": el KPI o métrica que la iniciativa quiere mover, si está en la descripción o en un campo (resúmelo en pocas palabras).
@@ -197,7 +199,7 @@ async function doSync(): Promise<JiraSnapshot> {
   const prefs = jiraPrefs()
   try {
     const r = await runAgent({
-      system: baseSystem(role(road, fp, prefs.filter, prefs.sortField, prefs.sortDesc)),
+      system: baseSystem(role(road, fp, prefs.filter, prefs.sortField, prefs.sortDesc, prefs.columnField)),
       prompt: `Lee ${road} y ${fp} y devuelve la copia.`,
       connectors: [connector],
       canUseTool: async (toolName, input) =>
@@ -211,7 +213,7 @@ async function doSync(): Promise<JiraSnapshot> {
     })
     const data = r.structured as Omit<JiraSnapshot, 'at'> | null
     if (!data) throw new Error('Claude no devolvió los datos de Jira.')
-    const snap: JiraSnapshot = withPositions({ at: new Date().toISOString(), ...data, sortField: prefs.sortField, sortDesc: prefs.sortDesc })
+    const snap: JiraSnapshot = withPositions({ at: new Date().toISOString(), ...data, sortField: prefs.sortField, sortDesc: prefs.sortDesc, columnField: prefs.columnField })
     db.setSetting(SNAPSHOT_KEY, JSON.stringify(snap))
     db.setSetting(ERROR_KEY, null)
     markAiOk()
@@ -223,10 +225,12 @@ async function doSync(): Promise<JiraSnapshot> {
   }
 }
 
-/** Para el programador: vuelve a leer si la copia tiene más de 3 horas. */
+/** Para el programador: vuelve a leer si la copia tiene más de 3 horas o se leyó con otra configuración. */
 export async function maybeSyncJira(): Promise<void> {
   const snap = getSnapshot()
-  if (snap && Date.now() - new Date(snap.at).getTime() < JIRA_EVERY) return
+  const p = jiraPrefs()
+  const sameSetup = !!snap && (snap.columnField ?? '') === p.columnField && (snap.sortField ?? '') === p.sortField
+  if (snap && sameSetup && Date.now() - new Date(snap.at).getTime() < JIRA_EVERY) return
   if (!(await jiraConnector())) return
   await syncJira().catch(() => undefined)
 }
@@ -268,7 +272,7 @@ export async function guessJira(): Promise<JiraGuess> {
   if (!connector) throw setupError('Tu cuenta de Claude no tiene Jira conectado. Conéctalo en claude.ai → Ajustes → Conectores → Atlassian (Jira) y vuelve a intentarlo.')
   const p = jiraPrefs()
   const r = await runAgent({
-    system: baseSystem(`Miras el Jira del usuario, un product manager, usando SOLO herramientas de lectura. Sus pasos de producto son: Backlog 3, Backlog 2, Backlog, Discovery, Ready to refine, Ready to dev, WIP, Done. Encuentra su proyecto de iniciativas (ahora cree que es ${p.road}) y el de tareas técnicas y épicas (ahora ${p.fp}), y lista los estados que usan las iniciativas con el paso al que corresponde cada uno.`),
+    system: baseSystem(`Miras el Jira del usuario, un product manager, usando SOLO herramientas de lectura. Sus pasos de producto son: Backlog 3, Backlog 2, Backlog, Discovery, Ready to refine, Ready to dev, WIP, Done. Encuentra su proyecto de iniciativas (ahora cree que es ${p.road}) y el de tareas técnicas y épicas (ahora ${p.fp}), y lista los valores del campo «${p.columnField}» que usan las iniciativas (ese campo, no otro llamado «Estado») con el paso al que corresponde cada uno.`),
     prompt: 'Deduce la configuración.',
     connectors: [connector],
     canUseTool: async (toolName, input) =>

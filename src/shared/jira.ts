@@ -49,6 +49,8 @@ export interface JiraSnapshot {
   /** Campo de Jira por el que se leyeron ordenadas las iniciativas (vacío: orden de la app). */
   sortField?: string
   sortDesc?: boolean
+  /** Campo de Jira con el que se repartieron las iniciativas en columnas. */
+  columnField?: string
   initiatives: JiraInitiative[]
   tasks: JiraTask[]
   epics: JiraEpic[]
@@ -216,6 +218,8 @@ export interface JiraPrefs {
   hidden: StageId[]
   /** Estados con otro nombre en tu Jira → paso de ROAD («En curso» → WIP). */
   aliases: Record<string, StageId>
+  /** Campo de Jira que decide en qué columna va cada iniciativa («Status» por defecto). */
+  columnField: string
   /** Campo de Jira por el que ordenar las iniciativas («Prioridad», «Rank»…). Vacío: orden de la app. */
   sortField: string
   /** De mayor a menor (o de la Z a la A). */
@@ -224,7 +228,7 @@ export interface JiraPrefs {
   view: 'board' | 'list'
 }
 
-export const DEFAULT_PREFS: JiraPrefs = { road: 'ROAD', fp: 'FP', filter: '', hidden: [], aliases: {}, sortField: '', sortDesc: false, view: 'board' }
+export const DEFAULT_PREFS: JiraPrefs = { road: 'ROAD', fp: 'FP', filter: '', hidden: [], aliases: {}, columnField: 'Status', sortField: '', sortDesc: false, view: 'board' }
 
 const aliasKey = (s: string) => norm(s)
 
