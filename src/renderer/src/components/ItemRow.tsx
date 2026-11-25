@@ -20,7 +20,7 @@ export function DuePill({ item, atRisk }: { item: Item; atRisk?: boolean }) {
   return <Pill tone={tone}>{overdue ? `Atrasada · ${rel}` : atRisk ? `En riesgo · ${rel}` : rel}</Pill>
 }
 
-export function SourceLine({ item }: { item: Item }) {
+export function SourceLine({ item, full }: { item: Item; full?: boolean }) {
   const { go } = useNav()
   if (!item.sourceSnippet && !item.sourceRef) return null
   const label: Record<Item['sourceType'], string> = {
@@ -49,7 +49,7 @@ export function SourceLine({ item }: { item: Item }) {
   }
   if (item.sourceSnippet) parts.push(<span key="s">{parts.length ? ' · ' : ''}«{item.sourceSnippet}»</span>)
   if (!parts.length) return null
-  return <div className="mt-0.5 truncate text-[12px] text-faint">{parts}</div>
+  return <div className={`mt-0.5 text-[12px] text-faint ${full ? 'whitespace-pre-wrap break-words' : 'truncate'}`}>{parts}</div>
 }
 
 export function ItemRow({

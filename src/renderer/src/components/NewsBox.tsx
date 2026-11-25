@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { JiraSnapshot } from '@shared/jira'
 import { readAgo } from '@shared/jira'
-import type { NewsEntry, NewsTarget } from '@shared/news'
+import { explainNewsPrompt, type NewsEntry, type NewsTarget } from '@shared/news'
 import type { ScoredItem } from '@shared/types'
 import { call, useAction, useData } from '../api'
 import { useNav } from '../nav'
@@ -65,6 +65,7 @@ export function NewsBox({ items }: { items: ScoredItem[] }) {
 function NewsRow({ n, targets }: { n: NewsEntry; targets: NewsTarget[] }) {
   const { talk } = useNav()
   const [mode, setMode] = useState<null | 'other' | 'dismiss'>(null)
+  const [open, setOpen] = useState(false)
   const [pick, setPick] = useState('')
   const [reason, setReason] = useState('')
   const decide = useAction(async (d: unknown) => {
@@ -81,20 +82,38 @@ function NewsRow({ n, targets }: { n: NewsEntry; targets: NewsTarget[] }) {
 
   return (
     <div className="border-b border-line py-3 last:border-0">
-      <div className="text-[13.5px]">{n.summary}</div>
-      <div className="mt-0.5 text-[12px] text-faint">
+      <button className="flex w-full items-start gap-1.5 text-left" onClick={() => setOpen(!open)} title={open ? 'Cerrar' : 'Ver el contexto'}>
+        <Icon name="chevron" className={`mt-0.5 h-3.5 w-3.5 shrink-0 text-faint transition-transform ${open ? 'rotate-90' : ''}`} />
+        <span className="text-[13.5px] hover:underline">{n.summary}</span>
+      </button>
+      <div className="mt-0.5 pl-5 text-[12px] text-faint">
         {[n.from, n.tool].filter(Boolean).join(' · ')}
         {n.ref.startsWith('http') ? (
           <button className="ml-2 hover:text-ink hover:underline" onClick={() => call('shell.open', n.ref)}>
-            Abrir
+            Ver el original ↗
           </button>
         ) : null}
       </div>
+      {open ? (
+        <div className="mt-2 ml-5 space-y-2 rounded-lg bg-panel px-3 py-2.5 text-[13px] leading-relaxed">
+          {n.context ? <p className="whitespace-pre-wrap">{n.context}</p> : null}
+          {n.quote ? <blockquote className="border-l-2 border-line-strong pl-2.5 whitespace-pre-wrap text-muted italic">«{n.quote}»</blockquote> : null}
+          {n.why ? (
+            <p>
+              <span className="font-medium">Por qué Claude propone esto:</span> <span className="text-muted">{n.why}</span>
+            </p>
+          ) : null}
+          {!n.context && !n.quote ? <p className="text-faint">Esta novedad se leyó antes de que Claude guardara más contexto. Pregúntale y te lo explica.</p> : null}
+          <Button size="sm" variant="ghost" onClick={() => talk(explainNewsPrompt(n))}>
+            <Icon name="chat" /> Pregúntale a Claude
+          </Button>
+        </div>
+      ) : null}
       <div className="mt-1.5 flex items-start gap-1.5 text-[12.5px]">
         <Icon name="sparkles" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-clay" />
         <span>
           <span className="font-medium">{proposal.text}</span>
-          {n.why ? <span className="text-muted"> · {n.why}</span> : null}
+          {n.why && !open ? <span className="text-muted"> · {n.why}</span> : null}
         </span>
       </div>
       {mode === 'other' ? (

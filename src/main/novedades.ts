@@ -46,12 +46,17 @@ const NEWS_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['ref', 'tool', 'from', 'summary', 'action', 'targetKind', 'targetId', 'title', 'why'],
+        required: ['ref', 'tool', 'from', 'summary', 'context', 'quote', 'action', 'targetKind', 'targetId', 'title', 'why'],
         properties: {
           ref: { type: 'string', description: 'Enlace o identificador único del mensaje, correo, documento o ticket' },
           tool: { type: 'string' },
           from: { type: ['string', 'null'], description: 'Quién lo escribe o lo pide' },
           summary: { type: 'string', description: 'Qué ha pasado, en una frase' },
+          context: {
+            type: ['string', 'null'],
+            description: 'Para entenderlo sin abrir el original: qué se ha dicho, quién lo pide, para cuándo y por qué le afecta. 2 a 4 frases. null si es ruido'
+          },
+          quote: { type: ['string', 'null'], description: 'El trozo clave del original copiado tal cual (máx. 300 caracteres). null si no hay texto' },
           action: { type: 'string', enum: ['add', 'encargo', 'product', 'noise'] },
           targetKind: { type: ['string', 'null'], enum: ['item', 'road', null] },
           targetId: { type: ['string', 'null'], description: 'Para add: id de «misCosas» o clave ROAD de «iniciativas»' },
@@ -111,7 +116,7 @@ async function doReview(): Promise<number> {
     effort: 'low',
     maxTurns: 30
   })
-  type Raw = { ref: string; tool: string; from: string | null; summary: string; action: NewsEntry['action']; targetKind: 'item' | 'road' | null; targetId: string | null; title: string | null; why: string }
+  type Raw = { ref: string; tool: string; from: string | null; summary: string; context?: string | null; quote?: string | null; action: NewsEntry['action']; targetKind: 'item' | 'road' | null; targetId: string | null; title: string | null; why: string }
   const raw = (r.structured as { news: Raw[] } | null)?.news ?? []
   const target = (x: Raw): NewsTarget | null => {
     if (x.targetKind === 'item' && x.targetId) {
@@ -128,7 +133,7 @@ async function doReview(): Promise<number> {
     const t = target(x)
     // Si propone añadir a algo que no existe, mejor que lo decida el usuario como encargo.
     const action = x.action === 'add' && !t ? 'encargo' : x.action
-    return { id: randomUUID(), at: startedAt, ref: x.ref, tool: x.tool, from: x.from, summary: x.summary, action, target: t, title: x.title ?? x.summary, why: x.why }
+    return { id: randomUUID(), at: startedAt, ref: x.ref, tool: x.tool, from: x.from, summary: x.summary, context: x.context?.trim() || null, quote: x.quote?.trim().slice(0, 400) || null, action, target: t, title: x.title ?? x.summary, why: x.why }
   })
   const pending = pendingNews()
   const fresh = acceptNews(entries, pending, seen)
@@ -166,7 +171,7 @@ export function decideNews(id: string, d: NewsDecision): { talk: string | null }
   const addTo = (t: NewsTarget) => {
     if (t.kind === 'item') {
       const it = db.getItem(t.id)
-      if (it) db.updateItem(it.id, { context: [it.context, `· ${ctx} — ${n.ref}`].filter(Boolean).join('\n') })
+      if (it) db.updateItem(it.id, { context: [it.context, `· ${ctx}${n.context ? ` — ${n.context}` : ''} — ${n.ref}`].filter(Boolean).join('\n') })
     } else talk = `Añade este contexto como comentario en ${t.id} «${t.title}»: ${ctx}. Origen: ${n.ref}. Enséñame el comentario y pídeme OK antes de escribirlo.`
   }
 
@@ -190,6 +195,6 @@ export function decideNews(id: string, d: NewsDecision): { talk: string | null }
 }
 
 function createEncargo(n: NewsEntry) {
-  db.createItem({ kind: 'promise', title: n.title ?? n.summary, person: n.from, status: 'active', sourceType: 'mcp', sourceRef: n.ref, sourceTool: n.tool, context: n.summary })
+  db.createItem({ kind: 'promise', title: n.title ?? n.summary, person: n.from, status: 'active', sourceType: 'mcp', sourceRef: n.ref, sourceTool: n.tool, sourceSnippet: n.quote ?? null, context: n.context ? `${n.summary}\n\n${n.context}` : n.summary })
 }
 

@@ -28,6 +28,22 @@ export interface NewsEntry {
   /** Para «encargo» o «product»: el título propuesto. */
   title: string | null
   why: string
+  /** Contexto para entenderlo: qué se ha dicho, quién lo pide y por qué te afecta. */
+  context?: string | null
+  /** Lo que dice el original, copiado tal cual (un trozo corto). */
+  quote?: string | null
+}
+
+/** Pregunta a Claude cuando una novedad no se entiende con lo que hay. */
+export function explainNewsPrompt(n: NewsEntry): string {
+  const bits = [
+    `Explícame esta novedad de ${n.tool}${n.from ? ` (de ${n.from})` : ''}: «${n.summary}».`,
+    n.context ? `Lo que sé: ${n.context}` : null,
+    n.quote ? `El original dice: «${n.quote}».` : null,
+    `Origen: ${n.ref}.`,
+    'Lee el original (solo lectura) y cuéntame en pocas frases qué ha pasado, qué se espera de mí y por qué importa. No escribas ni envíes nada.'
+  ]
+  return bits.filter(Boolean).join(' ')
 }
 
 export const NEWS_ACTION_LABEL: Record<NewsAction, string> = {

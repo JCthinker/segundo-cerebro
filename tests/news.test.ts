@@ -14,3 +14,17 @@ describe('novedades', () => {
     expect(rememberSeen(['a', 'b'], ['c', 'a', ' '], 3)).toEqual(['c', 'a', 'b'])
   })
 })
+
+describe('explainNewsPrompt', () => {
+  it('incluye lo que se sabe y pide no escribir nada', async () => {
+    const { explainNewsPrompt } = await import('../src/shared/news')
+    const p = explainNewsPrompt({
+      id: '1', at: '', ref: 'https://slack.com/x', tool: 'Slack', from: 'Ana', summary: 'Ana pide el informe',
+      action: 'encargo', target: null, title: 'Informe', why: 'te lo pide a ti', context: 'Lo necesita el viernes.', quote: '¿me pasas el informe?'
+    })
+    expect(p).toContain('de Ana')
+    expect(p).toContain('Lo necesita el viernes.')
+    expect(p).toContain('«¿me pasas el informe?»')
+    expect(p).toContain('No escribas ni envíes nada')
+  })
+})

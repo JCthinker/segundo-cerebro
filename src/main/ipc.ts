@@ -240,6 +240,17 @@ const api: Record<string, (...args: any[]) => unknown> = {
     dataChanged('items')
     return true
   },
+  'items.notes': (itemId: string) => db.listItemNotes(itemId),
+  'items.addNote': (itemId: string, text: string) => {
+    const n = db.addItemNote(itemId, text)
+    dataChanged('items')
+    return n
+  },
+  'items.deleteNote': (id: string) => {
+    db.deleteItemNote(id)
+    dataChanged('items')
+    return true
+  },
 
   // notas
   'notes.list': () => db.listNotes(),

@@ -2,6 +2,7 @@ import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk'
 import type { ActionRun, RunLogEntry } from '@shared/types'
 import { KIND_LABEL } from '@shared/types'
 import { requestTitle } from '@shared/history'
+import { notesForPrompt } from '@shared/item-notes'
 import * as db from '../db'
 import { dataChanged, emit } from '../events'
 import { cerebroServer, connectedToolsSummary, userMcpServers } from './app-mcp'
@@ -49,7 +50,7 @@ function describeItem(itemId: string | null): string {
 - Título: ${item.title}${item.context ? `\n- Contexto: ${item.context}` : ''}
 - Persona: ${item.person ?? '—'}
 - Vence: ${item.dueDate ?? 'sin fecha'}
-- Origen: ${item.sourceTool ?? item.sourceType}${item.sourceRef ? ` (${item.sourceRef})` : ''}${item.sourceSnippet ? `\n- Frase de origen: «${item.sourceSnippet}»` : ''}`
+- Origen: ${item.sourceTool ?? item.sourceType}${item.sourceRef ? ` (${item.sourceRef})` : ''}${item.sourceSnippet ? `\n- Frase de origen: «${item.sourceSnippet}»` : ''}${notesForPrompt(db.listItemNotes(item.id))}`
     : ''
 }
 

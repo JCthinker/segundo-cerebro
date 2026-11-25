@@ -16,6 +16,7 @@ import type {
 } from '@shared/types'
 import { addDays, defaultDueDate, toDay } from '@shared/dates'
 import { toolFromRef } from '@shared/dedupe'
+import { cleanNoteText, type ItemNote } from '@shared/item-notes'
 import { decrypt, encrypt } from './secrets'
 
 let db: Database.Database
@@ -51,6 +52,8 @@ CREATE TABLE IF NOT EXISTS action_runs (
   log_json TEXT NOT NULL DEFAULT '[]', created_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS item_notes (id TEXT PRIMARY KEY, item_id TEXT NOT NULL, text TEXT NOT NULL, created_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS item_notes_item ON item_notes(item_id, created_at);
 `
 
 export function openDb(file: string): void {
@@ -259,6 +262,25 @@ export function updateItem(id: string, patch: Partial<Omit<Item, 'id' | 'created
 }
 export function deleteItem(id: string): void {
   db.prepare('DELETE FROM items WHERE id = ?').run(id)
+  db.prepare('DELETE FROM item_notes WHERE item_id = ?').run(id)
+}
+
+// ---------- notas de una tarea ----------
+type ItemNoteRow = { id: string; item_id: string; text: string; created_at: string }
+const toItemNote = (r: ItemNoteRow): ItemNote => ({ id: r.id, itemId: r.item_id, text: r.text, createdAt: r.created_at })
+export function listItemNotes(itemId: string): ItemNote[] {
+  return (db.prepare('SELECT * FROM item_notes WHERE item_id = ? ORDER BY created_at').all(itemId) as ItemNoteRow[]).map(toItemNote)
+}
+export function addItemNote(itemId: string, text: string): ItemNote | null {
+  const clean = cleanNoteText(text)
+  if (!clean || !getItem(itemId)) return null
+  const id = randomUUID()
+  db.prepare('INSERT INTO item_notes(id, item_id, text, created_at) VALUES(?, ?, ?, ?)').run(id, itemId, clean, now())
+  db.prepare('UPDATE items SET updated_at = ? WHERE id = ?').run(now(), itemId)
+  return toItemNote(db.prepare('SELECT * FROM item_notes WHERE id = ?').get(id) as ItemNoteRow)
+}
+export function deleteItemNote(id: string): void {
+  db.prepare('DELETE FROM item_notes WHERE id = ?').run(id)
 }
 /** Evita duplicar propuestas cuando se vuelve a analizar la misma nota. */
 export function countProposed(): number {
