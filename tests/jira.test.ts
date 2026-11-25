@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildBoard, matches, nextQuarter, quarterOf, readAgo, stageOf, taskReady, warningsFor, type JiraInitiative, type JiraSnapshot, type JiraTask } from '../src/shared/jira'
+import { boardList, buildBoard, matches, withPositions, nextQuarter, quarterOf, readAgo, stageOf, taskReady, warningsFor, type JiraInitiative, type JiraSnapshot, type JiraTask } from '../src/shared/jira'
 
 const ini = (p: Partial<JiraInitiative>): JiraInitiative => ({
   key: 'ROAD-1', title: 'Iniciativa', status: 'Backlog', quarter: null, url: null, developers: [], taskKeys: [], epicKey: null, updated: null, ...p
@@ -101,5 +101,32 @@ describe('personalizar', () => {
     const t = applyAliases(s, { 'bloqueado ': 'wip', 'EN CURSO': 'wip' })
     expect(t.initiatives.map((i) => i.status)).toEqual(['WIP', 'WIP'])
     expect(unknownStatuses(t)).toEqual([])
+  })
+})
+
+describe('orden por un campo de Jira', () => {
+  const s = withPositions(
+    snap({
+      sortField: 'Prioridad',
+      initiatives: [
+        ini({ key: 'ROAD-7', status: 'WIP', quarter: 'Q1 - 2027', sortValue: 'Highest' }),
+        ini({ key: 'ROAD-2', status: 'Backlog', quarter: 'Q1 - 2027', sortValue: 'High' }),
+        ini({ key: 'ROAD-5', status: 'Backlog', quarter: 'Q4 - 2026', sortValue: 'Low' })
+      ]
+    })
+  )
+
+  it('dentro de cada paso respeta el orden de Jira, no el trimestre', () => {
+    const board = buildBoard(s, new Date(2026, 10, 24))
+    expect(board.find((c) => c.id === 'backlog')!.cards.map((c) => c.key)).toEqual(['ROAD-2', 'ROAD-5'])
+  })
+
+  it('la lista junta todos los pasos en el orden de Jira', () => {
+    expect(boardList(s, buildBoard(s, new Date(2026, 10, 24))).map((c) => c.key)).toEqual(['ROAD-7', 'ROAD-2', 'ROAD-5'])
+  })
+
+  it('sin campo elegido, la lista sigue el orden de la app (trimestre actual y avisos primero)', () => {
+    const plain = { ...s, sortField: '' }
+    expect(boardList(plain, buildBoard(plain, new Date(2026, 10, 24))).map((c) => c.key)).toEqual(['ROAD-5', 'ROAD-7', 'ROAD-2'])
   })
 })

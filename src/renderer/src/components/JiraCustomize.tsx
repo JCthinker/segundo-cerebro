@@ -43,7 +43,7 @@ export function JiraCustomize({ prefs, snap, onClose }: { prefs: JiraPrefs; snap
       <div className="flex items-start gap-3 border-b border-line px-5 py-4">
         <div className="flex-1">
           <div className="text-[15px] font-semibold">Personalizar Jira</div>
-          <p className="mt-0.5 text-[12.5px] text-muted">Qué proyectos leer, qué ver en el tablero y cómo se llaman tus estados.</p>
+          <p className="mt-0.5 text-[12.5px] text-muted">Qué proyectos leer, en qué orden, qué ver en el tablero y cómo se llaman tus estados.</p>
         </div>
         <Button size="sm" variant="claude" busy={guess.busy} onClick={() => void guess.run()}>
           <Icon name="sparkles" /> Que Claude lo deduzca
@@ -63,6 +63,29 @@ export function JiraCustomize({ prefs, snap, onClose }: { prefs: JiraPrefs; snap
         <Field label="Leer solo lo que cumpla (opcional)" hint="Una condición de Jira, por ejemplo «team = Pagos» o «labels = growth». Vacío: todo el proyecto.">
           <input className={inputCls} value={p.filter} onChange={(e) => setP({ ...p, filter: e.target.value })} placeholder="team = Pagos" />
         </Field>
+        <div>
+          <Field label="Ordenar las iniciativas por" hint="El nombre de un campo de tu Jira. Vacío: primero las del trimestre actual.">
+            <div className="flex gap-2">
+              <input className={inputCls} value={p.sortField} onChange={(e) => setP({ ...p, sortField: e.target.value })} placeholder="Prioridad" />
+              <select className={`${inputCls} w-44`} value={p.sortDesc ? 'desc' : 'asc'} onChange={(e) => setP({ ...p, sortDesc: e.target.value === 'desc' })} disabled={!p.sortField.trim()}>
+                <option value="asc">Ascendente (A→Z, 1→9)</option>
+                <option value="desc">Descendente (Z→A, 9→1)</option>
+              </select>
+            </div>
+          </Field>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {['Prioridad', 'Rank', 'Quarter', 'Fecha de vencimiento', 'Actualizada'].map((f) => (
+              <button key={f} onClick={() => setP({ ...p, sortField: f })} className={`h-6 rounded-md border px-2 text-[12px] ${p.sortField === f ? 'border-ink bg-ink text-page' : 'border-line-strong text-muted hover:text-ink'}`}>
+                {f}
+              </button>
+            ))}
+            {p.sortField ? (
+              <button onClick={() => setP({ ...p, sortField: '' })} className="h-6 px-1 text-[12px] text-muted underline hover:text-ink">
+                Quitar orden
+              </button>
+            ) : null}
+          </div>
+        </div>
         <div>
           <div className="mb-1.5 text-[12.5px] font-medium text-muted">Columnas del tablero</div>
           <div className="flex flex-wrap gap-1.5">
@@ -109,7 +132,7 @@ export function JiraCustomize({ prefs, snap, onClose }: { prefs: JiraPrefs; snap
       </div>
       <ErrorNote>{save.error}</ErrorNote>
       <div className="flex items-center justify-end gap-2 border-t border-line px-5 py-3">
-        <span className="mr-auto text-[12px] text-faint">Si cambias proyectos o filtro, Claude vuelve a leer Jira.</span>
+        <span className="mr-auto text-[12px] text-faint">Si cambias proyectos, filtro u orden, Claude vuelve a leer Jira.</span>
         <Button variant="ghost" onClick={onClose}>
           Cancelar
         </Button>

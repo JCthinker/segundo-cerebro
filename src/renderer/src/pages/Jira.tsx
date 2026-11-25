@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { setScreenDetail } from '../screen'
-import { buildBoard, matches, readAgo, taskReady, type BoardCard, type JiraPrefs, type JiraSnapshot, type JiraTask, type Warning } from '@shared/jira'
+import { boardList, buildBoard, matches, readAgo, taskReady, type BoardCard, type JiraPrefs, type JiraSnapshot, type JiraTask, type Warning } from '@shared/jira'
 import { JiraCustomize } from '../components/JiraCustomize'
 import { call, useAction, useData } from '../api'
 import { Button, Card, Empty, ErrorNote, Icon, inputBase, PageHeader, Pill, Spinner } from '../components/ui'
@@ -31,6 +31,7 @@ export function Jira() {
   const { data, error } = useData<JiraView>('jira.get', [], ['jira'])
   const { go, openInitiative } = useNav()
   const sync = useAction(() => call('jira.sync'))
+  const setView = (view: JiraPrefs['view']) => data && void call('jira.savePrefs', { ...data.prefs, view })
   const [tab, setTab] = useState<Tab>('road')
   const [q, setQ] = useState('')
   const [onlyWarn, setOnlyWarn] = useState(false)
@@ -115,6 +116,16 @@ export function Jira() {
     .map((col) => ({ ...col, cards: col.cards.filter(cardShown) }))
   const hiddenLow = board.filter((c) => c.id === 'backlog3' || c.id === 'backlog2').reduce((n, c) => n + c.cards.length, 0)
   const tasks = snap.tasks.filter((t) => t.epicKey !== t.key)
+  const view = data.prefs.view ?? 'board'
+  const list = boardList(snap, columns)
+  const sortField = data.prefs.sortField
+  const sortNote = sortField
+    ? snap.sortField === sortField
+      ? `Ordenadas por ${sortField}${snap.sortDesc ? ' (de mayor a menor)' : ''}`
+      : busy
+        ? `Leyendo Jira ordenado por ${sortField}…`
+        : `Pulsa Actualizar para ordenarlas por ${sortField}`
+    : 'Ordenadas por trimestre'
 
   return (
     <div>
@@ -135,6 +146,21 @@ export function Jira() {
         >
           Solo con avisos
         </button>
+        {tab === 'road' ? (
+          <div className="flex overflow-hidden rounded-lg border border-line-strong text-[13px]">
+            {(
+              [
+                ['board', 'Tablero'],
+                ['list', 'Lista']
+              ] as const
+            ).map(([v, label]) => (
+              <button key={v} onClick={() => setView(v)} className={`h-8 px-3 ${view === v ? 'bg-ink text-page' : 'text-muted hover:text-ink'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        {tab === 'road' && sortNote ? <span className="text-[12.5px] text-faint">{sortNote}</span> : null}
         {tab === 'road' && hiddenLow ? (
           <button onClick={() => setLowBacklog(!lowBacklog)} className="text-[12.5px] text-muted underline hover:text-ink">
             {lowBacklog ? 'Ocultar Backlog 2 y 3' : `Ver Backlog 2 y 3 (${hiddenLow})`}
@@ -162,7 +188,47 @@ export function Jira() {
         ))}
       </div>
 
-      {tab === 'road' ? (
+      {tab === 'road' && view === 'list' ? (
+        <Card className="overflow-x-auto">
+          {list.length ? (
+            <table className="w-full min-w-[640px] text-[13px]">
+              <thead>
+                <tr className="border-b border-line text-left text-[12px] text-muted">
+                  <th className="px-4 py-2 font-medium">Iniciativa</th>
+                  {snap.sortField ? <th className="px-4 py-2 font-medium">{snap.sortField}</th> : null}
+                  <th className="px-4 py-2 font-medium">Estado</th>
+                  <th className="px-4 py-2 font-medium">Trimestre</th>
+                  <th className="px-4 py-2 font-medium">Avisos</th>
+                </tr>
+              </thead>
+              <tbody>
+                {list.map((c) => (
+                  <tr key={c.key} onClick={() => openInitiative(c.key)} className="cursor-pointer border-b border-line last:border-0 hover:bg-hover">
+                    <td className="px-4 py-2.5">
+                      <span className="mr-2 text-[12px] text-faint">{c.key}</span>
+                      {c.title}
+                    </td>
+                    {snap.sortField ? <td className="px-4 py-2.5 text-muted">{c.sortValue ?? '—'}</td> : null}
+                    <td className="px-4 py-2.5 text-muted">{c.status}</td>
+                    <td className="px-4 py-2.5 text-muted">{c.quarter ?? '—'}</td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex flex-wrap gap-1">
+                        {c.warnings.map((w) => (
+                          <Warn key={w.text} w={w} />
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p className="px-4 py-6 text-center text-[13px] text-muted">No hay iniciativas que mostrar.</p>
+          )}
+        </Card>
+      ) : null}
+
+      {tab === 'road' && view === 'board' ? (
         <div className="-mx-8 overflow-x-auto px-8 pb-4">
           <div className="flex gap-3">
             {columns.map((col) => (

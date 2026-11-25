@@ -1,4 +1,4 @@
-import { applyAliases, DEFAULT_PREFS, type JiraPrefs, type JiraSnapshot } from '@shared/jira'
+import { applyAliases, DEFAULT_PREFS, withPositions, type JiraPrefs, type JiraSnapshot } from '@shared/jira'
 import { isReadOnlyTool } from '@shared/permissions'
 import * as db from './db'
 import { dataChanged } from './events'
@@ -36,10 +36,25 @@ export function jiraPrefs(): JiraPrefs {
 /** Guarda cómo quieres ver Jira. Devuelve true si hay que volver a leerlo (cambian proyectos o filtro). */
 export function saveJiraPrefs(p: JiraPrefs): boolean {
   const before = jiraPrefs()
-  const clean: JiraPrefs = { road: p.road.trim().toUpperCase() || 'ROAD', fp: p.fp.trim().toUpperCase() || 'FP', filter: p.filter.trim(), hidden: p.hidden, aliases: p.aliases }
+  const clean: JiraPrefs = {
+    road: p.road.trim().toUpperCase() || 'ROAD',
+    fp: p.fp.trim().toUpperCase() || 'FP',
+    filter: p.filter.trim(),
+    hidden: p.hidden,
+    aliases: p.aliases,
+    sortField: (p.sortField ?? '').trim(),
+    sortDesc: !!p.sortDesc,
+    view: p.view === 'list' ? 'list' : 'board'
+  }
   db.setSetting('jira.prefs', JSON.stringify(clean))
   dataChanged('jira')
-  return before.road !== clean.road || before.fp !== clean.fp || before.filter !== clean.filter
+  return (
+    before.road !== clean.road ||
+    before.fp !== clean.fp ||
+    before.filter !== clean.filter ||
+    before.sortField !== clean.sortField ||
+    (!!clean.sortField && before.sortDesc !== clean.sortDesc)
+  )
 }
 
 export function jiraProjects(): { road: string; fp: string } {
@@ -88,7 +103,7 @@ const SNAPSHOT_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['key', 'title', 'status', 'quarter', 'url', 'developers', 'taskKeys', 'epicKey', 'updated', 'kpi'],
+        required: ['key', 'title', 'status', 'quarter', 'url', 'developers', 'taskKeys', 'epicKey', 'updated', 'kpi', 'sortValue'],
         properties: {
           key: str,
           title: str,
@@ -99,7 +114,8 @@ const SNAPSHOT_SCHEMA = {
           taskKeys: { type: 'array', items: str, description: 'Claves de las tareas FP relacionadas' },
           epicKey: { ...strOrNull, description: 'Épica de FP que replica esta iniciativa' },
           updated: { ...strOrNull, description: 'Última actualización, ISO 8601' },
-          kpi: { ...strOrNull, description: 'El KPI o métrica que se quiere mover, tal como aparece en la descripción o en un campo; null si no lo hay' }
+          kpi: { ...strOrNull, description: 'El KPI o métrica que se quiere mover, tal como aparece en la descripción o en un campo; null si no lo hay' },
+          sortValue: { ...strOrNull, description: 'Valor del campo por el que se ordena, tal como lo muestra Jira; null si no se pidió orden o está vacío' }
         }
       }
     },
@@ -139,7 +155,11 @@ const SNAPSHOT_SCHEMA = {
   }
 } as const
 
-function role(road: string, fp: string, filter = ''): string {
+function role(road: string, fp: string, filter = '', sortField = '', sortDesc = false): string {
+  const dir = sortDesc ? 'DESC' : 'ASC'
+  const order = sortField
+    ? `ORDEN: devuelve las iniciativas de ${road} EXACTAMENTE en el orden que da Jira con «ORDER BY "${sortField}" ${dir}» (si ese campo no existe con ese nombre, busca el campo que más se le parezca, como Prioridad/Priority o Rank/Clasificación, y úsalo). Respeta ese orden en la lista "initiatives", también al paginar. En "sortValue" pon el valor de ese campo tal como lo muestra Jira.\n\n`
+    : 'En "sortValue" pon siempre null.\n\n'
   return `Eres el lector de Jira del «segundo cerebro». Usa SOLO herramientas de lectura de Jira. No crees, cambies ni borres nada.
 
 Tienes que devolver una copia resumida de dos proyectos:
@@ -155,7 +175,7 @@ Tienes que devolver una copia resumida de dos proyectos:
    - Las épicas (tipo Epic) van en "epics", con la iniciativa de ${road} que replican y las tareas que tienen dentro.
    - El resto va en "tasks". "hasDescription" es true si la descripción tiene contenido real; "estimated" si tiene puntos o estimación.
 
-${filter ? `Aplica además este filtro a las dos consultas: AND (${filter})\n\n` : ''}Pide a Jira solo los campos que necesitas y pagina hasta tenerlo todo. No inventes datos: si no sabes algo, pon null o una lista vacía.`
+${filter ? `Aplica además este filtro a las dos consultas: AND (${filter})\n\n` : ''}${order}Pide a Jira solo los campos que necesitas y pagina hasta tenerlo todo. No inventes datos: si no sabes algo, pon null o una lista vacía.`
 }
 
 /** Lee Jira y guarda la copia. Si ya se está leyendo, espera a esa lectura. */
@@ -174,9 +194,10 @@ async function doSync(): Promise<JiraSnapshot> {
   const connector = await jiraConnector()
   if (!connector) throw setupError('Tu cuenta de Claude no tiene Jira conectado. Conéctalo en claude.ai → Ajustes → Conectores → Atlassian (Jira) y vuelve a intentarlo.')
   const { road, fp } = jiraProjects()
+  const prefs = jiraPrefs()
   try {
     const r = await runAgent({
-      system: baseSystem(role(road, fp, jiraPrefs().filter)),
+      system: baseSystem(role(road, fp, prefs.filter, prefs.sortField, prefs.sortDesc)),
       prompt: `Lee ${road} y ${fp} y devuelve la copia.`,
       connectors: [connector],
       canUseTool: async (toolName, input) =>
@@ -190,7 +211,7 @@ async function doSync(): Promise<JiraSnapshot> {
     })
     const data = r.structured as Omit<JiraSnapshot, 'at'> | null
     if (!data) throw new Error('Claude no devolvió los datos de Jira.')
-    const snap: JiraSnapshot = { at: new Date().toISOString(), ...data }
+    const snap: JiraSnapshot = withPositions({ at: new Date().toISOString(), ...data, sortField: prefs.sortField, sortDesc: prefs.sortDesc })
     db.setSetting(SNAPSHOT_KEY, JSON.stringify(snap))
     db.setSetting(ERROR_KEY, null)
     markAiOk()

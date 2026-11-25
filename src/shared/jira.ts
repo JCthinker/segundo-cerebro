@@ -19,6 +19,10 @@ export interface JiraInitiative {
   updated: string | null
   /** KPI que se quiere mover, si aparece en la iniciativa (copias antiguas no lo tienen). */
   kpi?: string | null
+  /** Valor del campo por el que eliges ordenar, tal como lo muestra Jira. */
+  sortValue?: string | null
+  /** Puesto que le da Jira al ordenar por ese campo (0 = la primera). */
+  position?: number
 }
 
 export interface JiraTask {
@@ -42,6 +46,9 @@ export interface JiraEpic {
 
 export interface JiraSnapshot {
   at: string
+  /** Campo de Jira por el que se leyeron ordenadas las iniciativas (vacío: orden de la app). */
+  sortField?: string
+  sortDesc?: boolean
   initiatives: JiraInitiative[]
   tasks: JiraTask[]
   epics: JiraEpic[]
@@ -140,7 +147,19 @@ export interface BoardColumn {
   cards: BoardCard[]
 }
 
-/** Las iniciativas repartidas por paso; dentro de cada uno, primero las del trimestre actual. */
+/** Orden de la app: primero el trimestre actual, luego las que tienen más avisos. */
+function appOrder(a: BoardCard, b: BoardCard): number {
+  return a.quarterRank - b.quarterRank || b.warnings.length - a.warnings.length || a.key.localeCompare(b.key)
+}
+
+/** Si elegiste un campo, el orden en que lo devolvió Jira; si no, el de la app. */
+export function cardOrder(snap: JiraSnapshot): (a: BoardCard, b: BoardCard) => number {
+  if (!snap.sortField) return appOrder
+  const pos = (c: BoardCard) => c.position ?? Number.MAX_SAFE_INTEGER
+  return (a, b) => pos(a) - pos(b) || appOrder(a, b)
+}
+
+/** Las iniciativas repartidas por paso; dentro de cada uno, por el campo que elegiste (o primero las del trimestre actual). */
 export function buildBoard(snap: JiraSnapshot, today: Date): BoardColumn[] {
   const cur = quarterOf(today)
   const next = nextQuarter(today)
@@ -155,9 +174,19 @@ export function buildBoard(snap: JiraSnapshot, today: Date): BoardColumn[] {
   const other: BoardColumn = { id: 'other', label: 'Otro estado', cards: [] }
   for (const c of cards) (columns.find((col) => col.id === c.stage) ?? other).cards.push(c)
   for (const col of [...columns, other]) {
-    col.cards.sort((a, b) => a.quarterRank - b.quarterRank || b.warnings.length - a.warnings.length || a.key.localeCompare(b.key))
+    col.cards.sort(cardOrder(snap))
   }
   return other.cards.length ? [...columns, other] : columns
+}
+
+/** Todas las iniciativas en una sola lista, sin agrupar por paso, en el orden elegido. */
+export function boardList(snap: JiraSnapshot, board: BoardColumn[]): BoardCard[] {
+  return board.flatMap((c) => c.cards).sort(cardOrder(snap))
+}
+
+/** Pone a cada iniciativa el puesto en que llegó de Jira. */
+export function withPositions(snap: JiraSnapshot): JiraSnapshot {
+  return { ...snap, initiatives: snap.initiatives.map((i, n) => ({ ...i, position: n })) }
 }
 
 /** Cuándo se leyó Jira, en llano: «hace 5 min», «hace 2 h», «hace 3 días». */
@@ -187,9 +216,15 @@ export interface JiraPrefs {
   hidden: StageId[]
   /** Estados con otro nombre en tu Jira → paso de ROAD («En curso» → WIP). */
   aliases: Record<string, StageId>
+  /** Campo de Jira por el que ordenar las iniciativas («Prioridad», «Rank»…). Vacío: orden de la app. */
+  sortField: string
+  /** De mayor a menor (o de la Z a la A). */
+  sortDesc: boolean
+  /** Cómo ver las iniciativas: tablero por pasos o una sola lista. */
+  view: 'board' | 'list'
 }
 
-export const DEFAULT_PREFS: JiraPrefs = { road: 'ROAD', fp: 'FP', filter: '', hidden: [], aliases: {} }
+export const DEFAULT_PREFS: JiraPrefs = { road: 'ROAD', fp: 'FP', filter: '', hidden: [], aliases: {}, sortField: '', sortDesc: false, view: 'board' }
 
 const aliasKey = (s: string) => norm(s)
 
