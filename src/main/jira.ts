@@ -1,4 +1,4 @@
-import { applyAliases, DEFAULT_PREFS, withPositions, type JiraPrefs, type JiraSnapshot } from '@shared/jira'
+import { applyAliases, DEFAULT_PREFS, GROUP_OPTIONS, withPositions, type JiraPrefs, type JiraSnapshot } from '@shared/jira'
 import { isReadOnlyTool } from '@shared/permissions'
 import * as db from './db'
 import { dataChanged } from './events'
@@ -42,7 +42,9 @@ export function saveJiraPrefs(p: JiraPrefs): boolean {
     filter: p.filter.trim(),
     hidden: p.hidden,
     aliases: p.aliases,
-    columnField: (p.columnField ?? '').trim() || 'Status',
+    groupBy: GROUP_OPTIONS.some((g) => g.id === p.groupBy) ? p.groupBy : 'status',
+    groupField: (p.groupField ?? '').trim(),
+    hiddenCols: p.hiddenCols ?? {},
     sortField: (p.sortField ?? '').trim(),
     sortDesc: !!p.sortDesc,
     view: p.view === 'list' ? 'list' : 'board'
@@ -53,10 +55,16 @@ export function saveJiraPrefs(p: JiraPrefs): boolean {
     before.road !== clean.road ||
     before.fp !== clean.fp ||
     before.filter !== clean.filter ||
-    before.columnField !== clean.columnField ||
+    (clean.groupBy === 'field' && !!clean.groupField && before.groupField !== clean.groupField) ||
+    (clean.groupBy === 'field' && before.groupBy !== 'field') ||
     before.sortField !== clean.sortField ||
     (!!clean.sortField && before.sortDesc !== clean.sortDesc)
   )
+}
+
+/** El campo que hay que leer para las columnas (solo con «Otro campo de Jira»). */
+export function groupFieldOf(p: JiraPrefs): string {
+  return p.groupBy === 'field' ? p.groupField : ''
 }
 
 export function jiraProjects(): { road: string; fp: string } {
@@ -105,11 +113,11 @@ const SNAPSHOT_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['key', 'title', 'status', 'quarter', 'url', 'developers', 'taskKeys', 'epicKey', 'updated', 'kpi', 'sortValue'],
+        required: ['key', 'title', 'status', 'quarter', 'url', 'developers', 'taskKeys', 'epicKey', 'updated', 'kpi', 'sortValue', 'groupValue'],
         properties: {
           key: str,
           title: str,
-          status: { type: 'string', description: 'Valor exacto del campo de columnas que pide el sistema (Status por defecto)' },
+          status: { type: 'string', description: 'Nombre exacto del Status (estado) del ticket en Jira' },
           quarter: { ...strOrNull, description: 'Valor del campo Quarter, p. ej. «Q1 - 2027»' },
           url: strOrNull,
           developers: { type: 'array', items: str, description: 'Desarrolladores que participan (responsable u otros asignados)' },
@@ -117,7 +125,8 @@ const SNAPSHOT_SCHEMA = {
           epicKey: { ...strOrNull, description: 'Épica de FP que replica esta iniciativa' },
           updated: { ...strOrNull, description: 'Última actualización, ISO 8601' },
           kpi: { ...strOrNull, description: 'El KPI o métrica que se quiere mover, tal como aparece en la descripción o en un campo; null si no lo hay' },
-          sortValue: { ...strOrNull, description: 'Valor del campo por el que se ordena, tal como lo muestra Jira; null si no se pidió orden o está vacío' }
+          sortValue: { ...strOrNull, description: 'Valor del campo por el que se ordena, tal como lo muestra Jira; null si no se pidió orden o está vacío' },
+          groupValue: { ...strOrNull, description: 'Valor del campo pedido para las columnas, tal como lo muestra Jira; null si no se pidió o está vacío' }
         }
       }
     },
@@ -157,7 +166,10 @@ const SNAPSHOT_SCHEMA = {
   }
 } as const
 
-export function role(road: string, fp: string, filter = '', sortField = '', sortDesc = false, columnField = 'Status'): string {
+export function role(road: string, fp: string, filter = '', sortField = '', sortDesc = false, groupField = ''): string {
+  const group = groupField
+    ? `COLUMNAS: en "groupValue" pon el valor del campo «${groupField}» de cada iniciativa, tal como lo muestra Jira (si tiene varios valores, sepáralos con comas; si el nombre no coincide exacto, usa el campo que más se le parezca).\n\n`
+    : 'En "groupValue" pon siempre null.\n\n'
   const dir = sortDesc ? 'DESC' : 'ASC'
   const order = sortField
     ? `ORDEN: devuelve las iniciativas de ${road} EXACTAMENTE en el orden que da Jira con «ORDER BY "${sortField}" ${dir}» (si ese campo no existe con ese nombre, busca el campo que más se le parezca, como Prioridad/Priority o Rank/Clasificación, y úsalo). Respeta ese orden en la lista "initiatives", también al paginar. En "sortValue" pon el valor de ese campo tal como lo muestra Jira.\n\n`
@@ -167,7 +179,7 @@ export function role(road: string, fp: string, filter = '', sortField = '', sort
 Tienes que devolver una copia resumida de dos proyectos:
 1. Proyecto ${road} (iniciativas de producto): todas las que no están en Done, y las que pasaron a Done en los últimos 120 días.
    Por ejemplo, con JQL: project = ${road} AND (statusCategory != Done OR updated >= -120d)
-   - "status": el valor EXACTO del campo llamado «${columnField}» de cada iniciativa (por ejemplo Backlog 3, Backlog 2, Backlog, Discovery, Ready to refine, Ready to dev, WIP, Done…). Usa ese campo y ningún otro: si en el ticket hay a la vez un campo «Estado» y otro «${columnField}», el bueno es «${columnField}». Si hay un campo personalizado con ese nombre exacto, usa ese; si no, el estado normal del ticket.
+   - "status": el nombre exacto del Status del ticket, el estado normal de Jira (Backlog 3, Backlog 2, Backlog, Discovery, Ready to refine, Ready to dev, WIP, Done…).
    - "quarter": el valor del campo personalizado llamado Quarter (formato «Q1 - 2027»), o null.
    - "developers": el responsable y cualquier desarrollador asignado o mencionado como participante en los campos del ticket.
    - "kpi": el KPI o métrica que la iniciativa quiere mover, si está en la descripción o en un campo (resúmelo en pocas palabras).
@@ -177,7 +189,7 @@ Tienes que devolver una copia resumida de dos proyectos:
    - Las épicas (tipo Epic) van en "epics", con la iniciativa de ${road} que replican y las tareas que tienen dentro.
    - El resto va en "tasks". "hasDescription" es true si la descripción tiene contenido real; "estimated" si tiene puntos o estimación.
 
-${filter ? `Aplica además este filtro a las dos consultas: AND (${filter})\n\n` : ''}${order}Pide a Jira solo los campos que necesitas y pagina hasta tenerlo todo. No inventes datos: si no sabes algo, pon null o una lista vacía.`
+${filter ? `Aplica además este filtro a las dos consultas: AND (${filter})\n\n` : ''}${order}${group}Pide a Jira solo los campos que necesitas y pagina hasta tenerlo todo. No inventes datos: si no sabes algo, pon null o una lista vacía.`
 }
 
 /** Lee Jira y guarda la copia. Si ya se está leyendo, espera a esa lectura. */
@@ -199,7 +211,7 @@ async function doSync(): Promise<JiraSnapshot> {
   const prefs = jiraPrefs()
   try {
     const r = await runAgent({
-      system: baseSystem(role(road, fp, prefs.filter, prefs.sortField, prefs.sortDesc, prefs.columnField)),
+      system: baseSystem(role(road, fp, prefs.filter, prefs.sortField, prefs.sortDesc, groupFieldOf(prefs))),
       prompt: `Lee ${road} y ${fp} y devuelve la copia.`,
       connectors: [connector],
       canUseTool: async (toolName, input) =>
@@ -213,7 +225,7 @@ async function doSync(): Promise<JiraSnapshot> {
     })
     const data = r.structured as Omit<JiraSnapshot, 'at'> | null
     if (!data) throw new Error('Claude no devolvió los datos de Jira.')
-    const snap: JiraSnapshot = withPositions({ at: new Date().toISOString(), ...data, sortField: prefs.sortField, sortDesc: prefs.sortDesc, columnField: prefs.columnField })
+    const snap: JiraSnapshot = withPositions({ at: new Date().toISOString(), ...data, sortField: prefs.sortField, sortDesc: prefs.sortDesc, groupField: groupFieldOf(prefs) })
     db.setSetting(SNAPSHOT_KEY, JSON.stringify(snap))
     db.setSetting(ERROR_KEY, null)
     markAiOk()
@@ -229,7 +241,7 @@ async function doSync(): Promise<JiraSnapshot> {
 export async function maybeSyncJira(): Promise<void> {
   const snap = getSnapshot()
   const p = jiraPrefs()
-  const sameSetup = !!snap && (snap.columnField ?? '') === p.columnField && (snap.sortField ?? '') === p.sortField
+  const sameSetup = !!snap && (snap.groupField ?? '') === groupFieldOf(p) && (snap.sortField ?? '') === p.sortField
   if (snap && sameSetup && Date.now() - new Date(snap.at).getTime() < JIRA_EVERY) return
   if (!(await jiraConnector())) return
   await syncJira().catch(() => undefined)
@@ -272,7 +284,7 @@ export async function guessJira(): Promise<JiraGuess> {
   if (!connector) throw setupError('Tu cuenta de Claude no tiene Jira conectado. Conéctalo en claude.ai → Ajustes → Conectores → Atlassian (Jira) y vuelve a intentarlo.')
   const p = jiraPrefs()
   const r = await runAgent({
-    system: baseSystem(`Miras el Jira del usuario, un product manager, usando SOLO herramientas de lectura. Sus pasos de producto son: Backlog 3, Backlog 2, Backlog, Discovery, Ready to refine, Ready to dev, WIP, Done. Encuentra su proyecto de iniciativas (ahora cree que es ${p.road}) y el de tareas técnicas y épicas (ahora ${p.fp}), y lista los valores del campo «${p.columnField}» que usan las iniciativas (ese campo, no otro llamado «Estado») con el paso al que corresponde cada uno.`),
+    system: baseSystem(`Miras el Jira del usuario, un product manager, usando SOLO herramientas de lectura. Sus pasos de producto son: Backlog 3, Backlog 2, Backlog, Discovery, Ready to refine, Ready to dev, WIP, Done. Encuentra su proyecto de iniciativas (ahora cree que es ${p.road}) y el de tareas técnicas y épicas (ahora ${p.fp}), y lista los estados (Status) que usan las iniciativas con el paso al que corresponde cada uno.`),
     prompt: 'Deduce la configuración.',
     connectors: [connector],
     canUseTool: async (toolName, input) =>

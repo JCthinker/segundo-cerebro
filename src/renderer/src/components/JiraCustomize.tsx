@@ -36,14 +36,13 @@ export function JiraCustomize({ prefs, snap, onClose }: { prefs: JiraPrefs; snap
     await call('jira.savePrefs', p)
     onClose()
   })
-  const toggle = (id: StageId) => setP({ ...p, hidden: p.hidden.includes(id) ? p.hidden.filter((x) => x !== id) : [...p.hidden, id] })
 
   return (
     <Modal onClose={onClose} width="max-w-2xl">
       <div className="flex items-start gap-3 border-b border-line px-5 py-4">
         <div className="flex-1">
           <div className="text-[15px] font-semibold">Personalizar Jira</div>
-          <p className="mt-0.5 text-[12.5px] text-muted">Qué proyectos leer, en qué orden, qué ver en el tablero y cómo se llaman tus estados.</p>
+          <p className="mt-0.5 text-[12.5px] text-muted">Qué proyectos leer, en qué orden y cómo se llaman tus estados. Las columnas se eligen en la propia pantalla.</p>
         </div>
         <Button size="sm" variant="claude" busy={guess.busy} onClick={() => void guess.run()}>
           <Icon name="sparkles" /> Que Claude lo deduzca
@@ -62,9 +61,6 @@ export function JiraCustomize({ prefs, snap, onClose }: { prefs: JiraPrefs; snap
         </div>
         <Field label="Leer solo lo que cumpla (opcional)" hint="Una condición de Jira, por ejemplo «team = Pagos» o «labels = growth». Vacío: todo el proyecto.">
           <input className={inputCls} value={p.filter} onChange={(e) => setP({ ...p, filter: e.target.value })} placeholder="team = Pagos" />
-        </Field>
-        <Field label="Repartir en columnas según el campo" hint="El campo de tu Jira que dice en qué paso está cada iniciativa. Normalmente «Status».">
-          <input className={inputCls} value={p.columnField} onChange={(e) => setP({ ...p, columnField: e.target.value })} placeholder="Status" />
         </Field>
         <div>
           <Field label="Ordenar las iniciativas por" hint="El nombre de un campo de tu Jira. Vacío: primero las del trimestre actual.">
@@ -87,20 +83,6 @@ export function JiraCustomize({ prefs, snap, onClose }: { prefs: JiraPrefs; snap
                 Quitar orden
               </button>
             ) : null}
-          </div>
-        </div>
-        <div>
-          <div className="mb-1.5 text-[12.5px] font-medium text-muted">Columnas del tablero</div>
-          <div className="flex flex-wrap gap-1.5">
-            {ROAD_STAGES.map((s) => (
-              <button
-                key={s.id}
-                onClick={() => toggle(s.id)}
-                className={`h-7 rounded-lg border px-2.5 text-[12.5px] ${p.hidden.includes(s.id) ? 'border-line text-faint line-through' : 'border-ink bg-ink text-page'}`}
-              >
-                {s.label}
-              </button>
-            ))}
           </div>
         </div>
         {unknown.length ? (
@@ -135,7 +117,7 @@ export function JiraCustomize({ prefs, snap, onClose }: { prefs: JiraPrefs; snap
       </div>
       <ErrorNote>{save.error}</ErrorNote>
       <div className="flex items-center justify-end gap-2 border-t border-line px-5 py-3">
-        <span className="mr-auto text-[12px] text-faint">Si cambias proyectos, filtro, columnas u orden, Claude vuelve a leer Jira.</span>
+        <span className="mr-auto text-[12px] text-faint">Si cambias proyectos, filtro u orden, Claude vuelve a leer Jira.</span>
         <Button variant="ghost" onClick={onClose}>
           Cancelar
         </Button>

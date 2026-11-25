@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { boardList, buildBoard, matches, withPositions, nextQuarter, quarterOf, readAgo, stageOf, taskReady, warningsFor, type JiraInitiative, type JiraSnapshot, type JiraTask } from '../src/shared/jira'
+import { applyAliases, boardList, buildBoard, DEFAULT_PREFS, groupBoard, hiddenColumns, matches, withPositions, nextQuarter, quarterOf, readAgo, stageOf, taskReady, warningsFor, type JiraInitiative, type JiraSnapshot, type JiraTask } from '../src/shared/jira'
 
 const ini = (p: Partial<JiraInitiative>): JiraInitiative => ({
   key: 'ROAD-1', title: 'Iniciativa', status: 'Backlog', quarter: null, url: null, developers: [], taskKeys: [], epicKey: null, updated: null, ...p
@@ -128,5 +128,45 @@ describe('orden por un campo de Jira', () => {
   it('sin campo elegido, la lista sigue el orden de la app (trimestre actual y avisos primero)', () => {
     const plain = { ...s, sortField: '' }
     expect(boardList(plain, buildBoard(plain, new Date(2026, 10, 24))).map((c) => c.key)).toEqual(['ROAD-5', 'ROAD-7', 'ROAD-2'])
+  })
+})
+
+describe('columnas según el criterio elegido', () => {
+  const s = snap({
+    initiatives: [
+      ini({ key: 'ROAD-1', status: 'Discovery', quarter: 'Q1 - 2027', developers: ['Ana', 'Luis'] }),
+      ini({ key: 'ROAD-2', status: 'Bloqueado', quarter: 'Q4 - 2026', developers: [] }),
+      ini({ key: 'ROAD-3', status: 'Backlog', quarter: null, developers: ['Ana'], groupValue: 'Pagos' })
+    ]
+  })
+  const today = new Date(2026, 10, 24)
+  const cols = (by: Parameters<typeof groupBoard>[2]) => groupBoard(s, today, by).map((c) => `${c.label}:${c.cards.map((x) => x.key).join(',')}`)
+
+  it('por Status: una columna por cada status real, los pasos de ROAD primero y en su orden', () => {
+    expect(cols('status')).toEqual(['Backlog:ROAD-3', 'Discovery:ROAD-1', 'Bloqueado:ROAD-2'])
+  })
+
+  it('por Status usa el nombre real aunque lo hayas traducido a un paso', () => {
+    const a = applyAliases(s, { Bloqueado: 'wip' })
+    expect(groupBoard(a, today, 'status').map((c) => c.label)).toContain('Bloqueado')
+    expect(groupBoard(a, today, 'stage').find((c) => c.label === 'WIP')!.cards.map((c) => c.key)).toEqual(['ROAD-2'])
+  })
+
+  it('por trimestre, en orden de fecha y «Sin trimestre» al final', () => {
+    expect(cols('quarter')).toEqual(['Q4 - 2026:ROAD-2', 'Q1 - 2027:ROAD-1', 'Sin trimestre:ROAD-3'])
+  })
+
+  it('por desarrollador, una iniciativa con dos personas sale en las dos', () => {
+    expect(cols('developer')).toEqual(['Ana:ROAD-1,ROAD-3', 'Luis:ROAD-1', 'Sin desarrollador:ROAD-2'])
+  })
+
+  it('por otro campo de Jira, con el valor leído', () => {
+    expect(cols('field')).toEqual(['Pagos:ROAD-3', 'Sin valor:ROAD-2,ROAD-1'])
+  })
+
+  it('con pasos, por defecto oculta Backlog 2 y 3; con otro criterio, nada', () => {
+    expect(hiddenColumns(DEFAULT_PREFS, 'stage')).toEqual(['Backlog 3', 'Backlog 2'])
+    expect(hiddenColumns(DEFAULT_PREFS, 'status')).toEqual([])
+    expect(hiddenColumns({ ...DEFAULT_PREFS, hiddenCols: { status: ['Done'] } }, 'status')).toEqual(['Done'])
   })
 })

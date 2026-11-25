@@ -15,19 +15,19 @@ vi.mock('../src/main/agent/connectors', () => ({ connectorLabel: (n: string) => 
 const { role, jiraPrefs, saveJiraPrefs } = await import('../src/main/jira')
 
 describe('lector de Jira', () => {
-  it('por defecto reparte en columnas con el campo Status, no con Estado', () => {
-    expect(jiraPrefs().columnField).toBe('Status')
-    const r = role('ROAD', 'FP')
-    expect(r).toContain('campo llamado «Status»')
-    expect(r).toContain('el bueno es «Status»')
+  it('por defecto las columnas son el Status de Jira y el lector lee el Status normal', () => {
+    expect(jiraPrefs().groupBy).toBe('status')
+    expect(role('ROAD', 'FP')).toContain('el nombre exacto del Status del ticket')
+    expect(role('ROAD', 'FP')).toContain('En "groupValue" pon siempre null')
+    expect(role('ROAD', 'FP', '', '', false, 'Equipo')).toContain('valor del campo «Equipo»')
   })
 
-  it('cambiar el campo de columnas obliga a volver a leer Jira', () => {
+  it('cambiar de criterio no vuelve a leer Jira, salvo que haga falta otro campo', () => {
     const p = jiraPrefs()
-    expect(saveJiraPrefs({ ...p, columnField: 'Fase' })).toBe(true)
-    expect(jiraPrefs().columnField).toBe('Fase')
-    expect(saveJiraPrefs({ ...jiraPrefs(), columnField: '  ' })).toBe(true)
-    expect(jiraPrefs().columnField).toBe('Status')
+    expect(saveJiraPrefs({ ...p, groupBy: 'quarter' })).toBe(false)
+    expect(saveJiraPrefs({ ...jiraPrefs(), hiddenCols: { quarter: ['Q1 - 2027'] } })).toBe(false)
+    expect(jiraPrefs().hiddenCols.quarter).toEqual(['Q1 - 2027'])
+    expect(saveJiraPrefs({ ...jiraPrefs(), groupBy: 'field', groupField: 'Equipo' })).toBe(true)
     expect(saveJiraPrefs({ ...jiraPrefs(), view: 'list' })).toBe(false)
   })
 })

@@ -23,6 +23,10 @@ export interface JiraInitiative {
   sortValue?: string | null
   /** Puesto que le da Jira al ordenar por ese campo (0 = la primera). */
   position?: number
+  /** Valor del campo de Jira que elegiste para las columnas (solo con «Otro campo de Jira»). */
+  groupValue?: string | null
+  /** El estado tal como está en Jira, antes de traducirlo a un paso de ROAD. */
+  rawStatus?: string
 }
 
 export interface JiraTask {
@@ -49,8 +53,8 @@ export interface JiraSnapshot {
   /** Campo de Jira por el que se leyeron ordenadas las iniciativas (vacío: orden de la app). */
   sortField?: string
   sortDesc?: boolean
-  /** Campo de Jira con el que se repartieron las iniciativas en columnas. */
-  columnField?: string
+  /** Campo de Jira cuyo valor se leyó en «groupValue». */
+  groupField?: string
   initiatives: JiraInitiative[]
   tasks: JiraTask[]
   epics: JiraEpic[]
@@ -182,7 +186,7 @@ export function buildBoard(snap: JiraSnapshot, today: Date): BoardColumn[] {
 }
 
 /** Todas las iniciativas en una sola lista, sin agrupar por paso, en el orden elegido. */
-export function boardList(snap: JiraSnapshot, board: BoardColumn[]): BoardCard[] {
+export function boardList(snap: JiraSnapshot, board: { cards: BoardCard[] }[]): BoardCard[] {
   return board.flatMap((c) => c.cards).sort(cardOrder(snap))
 }
 
@@ -214,12 +218,16 @@ export interface JiraPrefs {
   fp: string
   /** Condición JQL extra para leer solo lo tuyo (p. ej. «team = Pagos»). */
   filter: string
-  /** Columnas del tablero que no quieres ver. */
+  /** Columnas del tablero que no quieres ver (antiguo: solo pasos de ROAD). */
   hidden: StageId[]
+  /** Con qué criterio se reparten las iniciativas en columnas. */
+  groupBy: GroupBy
+  /** Campo de Jira para las columnas cuando eliges «Otro campo de Jira». */
+  groupField: string
+  /** Columnas que no quieres ver, por criterio: { status: ['Backlog 3'] }. */
+  hiddenCols: Partial<Record<GroupBy, string[]>>
   /** Estados con otro nombre en tu Jira → paso de ROAD («En curso» → WIP). */
   aliases: Record<string, StageId>
-  /** Campo de Jira que decide en qué columna va cada iniciativa («Status» por defecto). */
-  columnField: string
   /** Campo de Jira por el que ordenar las iniciativas («Prioridad», «Rank»…). Vacío: orden de la app. */
   sortField: string
   /** De mayor a menor (o de la Z a la A). */
@@ -228,7 +236,7 @@ export interface JiraPrefs {
   view: 'board' | 'list'
 }
 
-export const DEFAULT_PREFS: JiraPrefs = { road: 'ROAD', fp: 'FP', filter: '', hidden: [], aliases: {}, columnField: 'Status', sortField: '', sortDesc: false, view: 'board' }
+export const DEFAULT_PREFS: JiraPrefs = { road: 'ROAD', fp: 'FP', filter: '', hidden: [], aliases: {}, groupBy: 'status', groupField: '', hiddenCols: {}, sortField: '', sortDesc: false, view: 'board' }
 
 const aliasKey = (s: string) => norm(s)
 
@@ -241,7 +249,7 @@ export function applyAliases(snap: JiraSnapshot, aliases: Record<string, StageId
     initiatives: snap.initiatives.map((i) => {
       const to = map.get(aliasKey(i.status))
       const label = to && ROAD_STAGES.find((s) => s.id === to)?.label
-      return label ? { ...i, status: label } : i
+      return label ? { ...i, rawStatus: i.rawStatus ?? i.status, status: label } : i
     })
   }
 }
@@ -250,4 +258,76 @@ export function applyAliases(snap: JiraSnapshot, aliases: Record<string, StageId
 export function unknownStatuses(snap: JiraSnapshot | null): string[] {
   if (!snap) return []
   return [...new Set(snap.initiatives.filter((i) => stageOf(i.status) === 'other').map((i) => i.status))]
+}
+
+/** Criterios para repartir las iniciativas en columnas. */
+export type GroupBy = 'status' | 'stage' | 'quarter' | 'developer' | 'field'
+
+export const GROUP_OPTIONS: { id: GroupBy; label: string }[] = [
+  { id: 'status', label: 'Status de Jira' },
+  { id: 'stage', label: 'Paso de producto' },
+  { id: 'quarter', label: 'Trimestre' },
+  { id: 'developer', label: 'Desarrollador' },
+  { id: 'field', label: 'Otro campo de Jira' }
+]
+
+export interface GroupColumn {
+  /** El valor del criterio (también es su nombre). */
+  id: string
+  label: string
+  cards: BoardCard[]
+}
+
+const NONE: Record<GroupBy, string> = { status: 'Sin status', stage: 'Otro estado', quarter: 'Sin trimestre', developer: 'Sin desarrollador', field: 'Sin valor' }
+
+/** Columnas en las que cae una iniciativa con ese criterio (con desarrollador puede ir en varias). */
+function valuesOf(c: BoardCard, by: GroupBy): string[] {
+  const clean = (v: string | null | undefined) => (v ?? '').trim()
+  if (by === 'status') return [clean(c.rawStatus ?? c.status)]
+  if (by === 'stage') return [ROAD_STAGES.find((s) => s.id === c.stage)?.label ?? '']
+  if (by === 'quarter') return [clean(c.quarter)]
+  if (by === 'developer') return c.developers.length ? c.developers.map(clean) : ['']
+  return [clean(c.groupValue)]
+}
+
+/** Orden de las columnas: los pasos de ROAD en su orden, trimestres por fecha, el resto alfabético; «sin valor» al final. */
+function columnRank(label: string, by: GroupBy): [number, number, string] {
+  if (label === NONE[by]) return [2, 0, '']
+  const stage = ROAD_STAGES.findIndex((s) => s.status === norm(label))
+  if ((by === 'status' || by === 'stage' || by === 'field') && stage >= 0) return [0, stage, '']
+  const q = /q\s*([1-4])\D+(\d{4})/i.exec(label)
+  if (by === 'quarter' && q) return [0, Number(q[2]) * 10 + Number(q[1]), '']
+  return [1, 0, norm(label)]
+}
+
+/** Las iniciativas repartidas en columnas según el criterio que elijas; cada columna, en el orden elegido. */
+export function groupBoard(snap: JiraSnapshot, today: Date, by: GroupBy): GroupColumn[] {
+  const cards = buildBoard(snap, today).flatMap((c) => c.cards)
+  const cols = new Map<string, GroupColumn>()
+  if (by === 'stage') for (const s of ROAD_STAGES) cols.set(s.label, { id: s.label, label: s.label, cards: [] })
+  for (const c of cards) {
+    for (const v of new Set(valuesOf(c, by).map((x) => x || NONE[by]))) {
+      if (!cols.has(v)) cols.set(v, { id: v, label: v, cards: [] })
+      cols.get(v)!.cards.push(c)
+    }
+  }
+  const order = cardOrder(snap)
+  const out = [...cols.values()]
+  for (const col of out) col.cards.sort(order)
+  return out.sort((a, b) => {
+    const [x1, y1, z1] = columnRank(a.label, by)
+    const [x2, y2, z2] = columnRank(b.label, by)
+    return x1 - x2 || y1 - y2 || z1.localeCompare(z2, 'es')
+  })
+}
+
+/** Columnas ocultas para ese criterio. Con pasos, por defecto se ocultan Backlog 2 y 3 (como antes). */
+export function hiddenColumns(p: JiraPrefs, by: GroupBy): string[] {
+  const saved = p.hiddenCols?.[by]
+  if (saved) return saved
+  if (by === 'stage') {
+    const ids: StageId[] = p.hidden?.length ? p.hidden : ['backlog3', 'backlog2']
+    return ROAD_STAGES.filter((s) => ids.includes(s.id)).map((s) => s.label)
+  }
+  return []
 }

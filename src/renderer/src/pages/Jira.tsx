@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { setScreenDetail } from '../screen'
-import { boardList, buildBoard, matches, readAgo, taskReady, type BoardCard, type JiraPrefs, type JiraSnapshot, type JiraTask, type Warning } from '@shared/jira'
+import { boardList, GROUP_OPTIONS, groupBoard, hiddenColumns, matches, type GroupBy, readAgo, taskReady, type BoardCard, type JiraPrefs, type JiraSnapshot, type JiraTask, type Warning } from '@shared/jira'
 import { JiraCustomize } from '../components/JiraCustomize'
 import { call, useAction, useData } from '../api'
 import { Button, Card, Empty, ErrorNote, Icon, inputBase, PageHeader, Pill, Spinner } from '../components/ui'
@@ -31,18 +31,20 @@ export function Jira() {
   const { data, error } = useData<JiraView>('jira.get', [], ['jira'])
   const { go, openInitiative } = useNav()
   const sync = useAction(() => call('jira.sync'))
-  const setView = (view: JiraPrefs['view']) => data && void call('jira.savePrefs', { ...data.prefs, view })
+  const savePrefs = (patch: Partial<JiraPrefs>) => data && void call('jira.savePrefs', { ...data.prefs, ...patch })
+  const setView = (view: JiraPrefs['view']) => savePrefs({ view })
+  const [picking, setPicking] = useState(false)
   const [tab, setTab] = useState<Tab>('road')
   const [q, setQ] = useState('')
   const [onlyWarn, setOnlyWarn] = useState(false)
-  const [lowBacklog, setLowBacklog] = useState(false)
   const [customizing, setCustomizing] = useState(false)
 
   useEffect(() => {
     setScreenDetail(`pestaña ${({ road: 'Iniciativas ROAD (tablero por pasos)', sprint: 'Sprint y épicas', measure: 'Mediciones', fp: 'Tareas FP', epics: 'Épicas' } as Record<Tab, string>)[tab]}`)
   }, [tab])
   const snap = data?.snapshot ?? null
-  const board = useMemo(() => (snap ? buildBoard(snap, new Date()) : []), [snap])
+  const groupBy: GroupBy = data?.prefs.groupBy ?? 'status'
+  const board = useMemo(() => (snap ? groupBoard(snap, new Date(), groupBy) : []), [snap, groupBy])
 
   if (error) return <ErrorNote>{error}</ErrorNote>
   if (!data) return null
@@ -110,14 +112,14 @@ export function Jira() {
     )
 
   const cardShown = (c: BoardCard) => matches(`${c.key} ${c.title}`, q) && (!onlyWarn || c.warnings.length > 0)
-  const columns = board
-    .filter((col) => !data.prefs.hidden.includes(col.id))
-    .filter((col) => lowBacklog || (col.id !== 'backlog3' && col.id !== 'backlog2'))
-    .map((col) => ({ ...col, cards: col.cards.filter(cardShown) }))
-  const hiddenLow = board.filter((c) => c.id === 'backlog3' || c.id === 'backlog2').reduce((n, c) => n + c.cards.length, 0)
+  const hidden = hiddenColumns(data.prefs, groupBy)
+  const columns = board.filter((col) => !hidden.includes(col.id)).map((col) => ({ ...col, cards: col.cards.filter(cardShown) }))
+  const setHidden = (h: string[]) => savePrefs({ hiddenCols: { ...data.prefs.hiddenCols, [groupBy]: h } })
+  const fieldMissing = groupBy === 'field' && (!data.prefs.groupField || snap.groupField !== data.prefs.groupField)
   const tasks = snap.tasks.filter((t) => t.epicKey !== t.key)
   const view = data.prefs.view ?? 'board'
-  const list = boardList(snap, columns)
+  // En lista cada iniciativa sale una vez, aunque esté en varias columnas (p. ej. con varios desarrolladores).
+  const list = boardList(snap, columns).filter((c, n, all) => all.findIndex((x) => x.key === c.key) === n)
   const sortField = data.prefs.sortField
   const sortNote = sortField
     ? snap.sortField === sortField
@@ -161,10 +163,63 @@ export function Jira() {
           </div>
         ) : null}
         {tab === 'road' && sortNote ? <span className="text-[12.5px] text-faint">{sortNote}</span> : null}
-        {tab === 'road' && hiddenLow ? (
-          <button onClick={() => setLowBacklog(!lowBacklog)} className="text-[12.5px] text-muted underline hover:text-ink">
-            {lowBacklog ? 'Ocultar Backlog 2 y 3' : `Ver Backlog 2 y 3 (${hiddenLow})`}
-          </button>
+        {tab === 'road' ? (
+          <>
+            <label className="flex items-center gap-1.5 text-[13px] text-muted">
+              Columnas por
+              <select aria-label="Columnas por" className={`${inputBase} w-44`} value={groupBy} onChange={(e) => savePrefs({ groupBy: e.target.value as GroupBy })}>
+                {GROUP_OPTIONS.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {groupBy === 'field' ? (
+              <input
+                aria-label="Campo de Jira para las columnas"
+                key={data.prefs.groupField}
+                defaultValue={data.prefs.groupField}
+                placeholder="Nombre del campo, p. ej. Equipo"
+                className={`${inputBase} w-52`}
+                onBlur={(e) => e.target.value.trim() !== data.prefs.groupField && savePrefs({ groupField: e.target.value })}
+                onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+              />
+            ) : null}
+            <div className="relative">
+              <button onClick={() => setPicking(!picking)} className="h-8 rounded-lg border border-line-strong px-3 text-[13px] text-muted hover:text-ink">
+                Columnas visibles · {board.length - board.filter((c) => hidden.includes(c.id)).length} de {board.length}
+              </button>
+              {picking ? (
+                <div className="absolute top-9 left-0 z-20 w-64 rounded-xl border border-line-strong bg-raised p-2 shadow-lg">
+                  <div className="mb-1 flex justify-between px-1 text-[12px]">
+                    <button className="text-muted underline hover:text-ink" onClick={() => setHidden([])}>
+                      Todas
+                    </button>
+                    <button className="text-muted underline hover:text-ink" onClick={() => setHidden(board.map((c) => c.id))}>
+                      Ninguna
+                    </button>
+                    <button className="text-muted hover:text-ink" onClick={() => setPicking(false)}>
+                      Cerrar
+                    </button>
+                  </div>
+                  <div className="max-h-72 overflow-y-auto">
+                    {board.map((col) => (
+                      <label key={col.id} className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-[13px] hover:bg-hover">
+                        <input
+                          type="checkbox"
+                          checked={!hidden.includes(col.id)}
+                          onChange={() => setHidden(hidden.includes(col.id) ? hidden.filter((x) => x !== col.id) : [...hidden, col.id])}
+                        />
+                        <span className="flex-1">{col.label}</span>
+                        <span className="text-faint">{col.cards.length}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </>
         ) : null}
       </div>
 
@@ -187,6 +242,12 @@ export function Jira() {
           </button>
         ))}
       </div>
+
+      {tab === 'road' && fieldMissing ? (
+        <p className="mb-3 text-[13px] text-muted">
+          {!data.prefs.groupField ? 'Escribe el nombre del campo de Jira con el que quieres las columnas.' : busy ? `Leyendo el campo «${data.prefs.groupField}» de Jira…` : `Pulsa Actualizar para leer el campo «${data.prefs.groupField}».`}
+        </p>
+      ) : null}
 
       {tab === 'road' && view === 'list' ? (
         <Card className="overflow-x-auto">
@@ -238,7 +299,7 @@ export function Jira() {
                   <span className="text-faint">{col.cards.length}</span>
                 </div>
                 {col.cards.map((c) => (
-                  <button key={c.key} onClick={() => openInitiative(c.key)} className="rounded-xl border border-line bg-raised p-3 text-left hover:border-line-strong">
+                  <button key={`${col.id}-${c.key}`} onClick={() => openInitiative(c.key)} className="rounded-xl border border-line bg-raised p-3 text-left hover:border-line-strong">
                     <div className="flex items-center justify-between gap-2 text-[11.5px] text-faint">
                       <span>{c.key}</span>
                       {c.quarter ? <span className={c.quarterRank === 0 ? 'font-medium text-ink' : ''}>{c.quarter}</span> : null}
