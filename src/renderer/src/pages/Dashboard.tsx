@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { AiStatus, Brief, CalendarEvent, FlowItem, Item, MeetingInfo, ScoredItem, TodayView } from '@shared/types'
 import { formatDayLong, parseDay } from '@shared/dates'
 import { isDone, planDays, todayIds, type DayPlan, type PlanEntry } from '@shared/plan'
+import { tasksByMeeting } from '@shared/meetings'
 import { call, useAction, useData } from '../api'
 import { DismissButton } from '../components/Dismiss'
 import { NewsBox } from '../components/NewsBox'
@@ -26,15 +27,22 @@ export function Dashboard({ ai, shortcut }: { ai: AiStatus | null; shortcut: str
   const byId = new Map(ranked.map((s) => [s.item.id, s]))
   const checklists: Checklists = new Map((brief?.prepare ?? []).map((p) => [p.eventId, { items: p.checklist, done: new Set(p.done ?? []) }]))
 
+  // Las tareas que hablan de una reunión («Llevar la propuesta al grooming») van debajo de ella, no en la lista.
+  const entries = [...plan.overdue, ...plan.days.flatMap((d) => d.entries), ...plan.later, ...plan.undated.map((s) => ({ s, note: null }))]
+  const byMeeting = tasksByMeeting(entries.map((e) => e.s.item), data.events, new Date())
+  const entryById = new Map(entries.map((e) => [e.s.item.id, e]))
+  const tasksFor: MeetingTasks = (eventId) => (byMeeting.get(eventId) ?? []).map((id) => entryById.get(id)!).filter(Boolean)
+  const inMeeting = new Set([...byMeeting.values()].flat())
+
   // «Empieza por»: lo que eligió Claude en el brief o, sin brief, lo más urgente de hoy.
   // Si le has cambiado la fecha a algo que eligió Claude, ya no toca hoy y va a su nuevo día.
   const urgent = [...plan.overdue, ...today.entries.filter((e) => !isDone(e.s))].sort((a, b) => b.s.score - a.s.score)
   const forToday = todayIds(plan)
-  const briefTop = (brief?.top ?? []).filter((t) => byId.has(t.itemId) && forToday.has(t.itemId))
+  const briefTop = (brief?.top ?? []).filter((t) => byId.has(t.itemId) && forToday.has(t.itemId) && !inMeeting.has(t.itemId))
   const top: { s: ScoredItem; why: string }[] = briefTop.length
     ? briefTop.slice(0, 3).map((t) => ({ s: byId.get(t.itemId)!, why: t.why }))
-    : urgent.slice(0, 3).map((e) => ({ s: e.s, why: e.s.reasons.join(' · ') }))
-  const shown = new Set(top.map((t) => t.s.item.id))
+    : urgent.filter((e) => !inMeeting.has(e.s.item.id)).slice(0, 3).map((e) => ({ s: e.s, why: e.s.reasons.join(' · ') }))
+  const shown = new Set([...top.map((t) => t.s.item.id), ...inMeeting])
   const notShown = (e: PlanEntry) => !shown.has(e.s.item.id)
 
   const overdue = plan.overdue.filter(notShown)
@@ -128,7 +136,7 @@ export function Dashboard({ ai, shortcut }: { ai: AiStatus | null; shortcut: str
         </Card>
         <Card className="divide-y divide-line px-4 lg:col-span-2">
           {today.events.length ? (
-            today.events.map((e) => <Meeting key={e.id} e={e} checklist={checklists.get(e.id)} info={data.meetings?.[e.id]} />)
+            today.events.map((e) => <Meeting key={e.id} e={e} checklist={checklists.get(e.id)} info={data.meetings?.[e.id]} tasks={tasksFor(e.id)} />)
           ) : (
             <div className="py-6 text-center text-[13px] text-faint">Sin reuniones hoy</div>
           )}
@@ -138,7 +146,7 @@ export function Dashboard({ ai, shortcut }: { ai: AiStatus | null; shortcut: str
       <SectionLabel>Próximos días</SectionLabel>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
         {next.map((d, i) => (
-          <DayCard key={d.day} d={d} label={i === 0 ? 'Mañana' : weekday(d.day)} checklists={checklists} skip={shown} meetings={data.meetings ?? {}} />
+          <DayCard key={d.day} d={d} label={i === 0 ? 'Mañana' : weekday(d.day)} checklists={checklists} skip={shown} meetings={data.meetings ?? {}} tasksFor={tasksFor} />
         ))}
       </div>
 
@@ -244,6 +252,7 @@ function QuickBox({ ai, shortcut }: { ai: AiStatus | null; shortcut: string | nu
 }
 
 type Checklists = Map<string, { items: string[]; done: Set<string> }>
+type MeetingTasks = (eventId: string) => PlanEntry[]
 
 /** Un punto de la checklist de una reunión: se marca y desmarca; tachado hasta que acaba el día. */
 function CheckItem({ eventId, text, done }: { eventId: string; text: string; done: boolean }) {
@@ -255,7 +264,7 @@ function CheckItem({ eventId, text, done }: { eventId: string; text: string; don
   )
 }
 
-function DayCard({ d, label, checklists, skip, meetings }: { d: DayPlan; label: string; checklists: Checklists; skip: Set<string>; meetings: Record<string, MeetingInfo> }) {
+function DayCard({ d, label, checklists, skip, meetings, tasksFor }: { d: DayPlan; label: string; checklists: Checklists; skip: Set<string>; meetings: Record<string, MeetingInfo>; tasksFor: MeetingTasks }) {
   const { go } = useNav()
   const entries = d.entries.filter((e) => !skip.has(e.s.item.id))
   const pending = entries.filter((e) => !isDone(e.s)).length
@@ -299,6 +308,13 @@ function DayCard({ d, label, checklists, skip, meetings }: { d: DayPlan; label: 
                   <CheckItem key={c} eventId={e.id} text={c} done={list.done.has(c)} />
                 ))}
               </ul>
+            ) : null}
+            {tasksFor(e.id).length ? (
+              <div className="ml-12">
+                {tasksFor(e.id).map((t) => (
+                  <MiniRow key={t.s.item.id} s={t.s} note={t.note} />
+                ))}
+              </div>
             ) : null}
           </div>
         )
@@ -375,7 +391,7 @@ function Detected({ items }: { items: Item[] }) {
   )
 }
 
-function Meeting({ e, checklist, info }: { e: CalendarEvent; checklist?: { items: string[]; done: Set<string> }; info?: MeetingInfo }) {
+function Meeting({ e, checklist, info, tasks }: { e: CalendarEvent; checklist?: { items: string[]; done: Set<string> }; info?: MeetingInfo; tasks: PlanEntry[] }) {
   const { go, talk } = useNav()
   const openNote = useAction(async () => go('notes', await call<string>('meeting.note', e.id)))
   const typed = info && info.type !== 'other'
@@ -411,6 +427,14 @@ function Meeting({ e, checklist, info }: { e: CalendarEvent; checklist?: { items
             <CheckItem key={c} eventId={e.id} text={c} done={checklist.done.has(c)} />
           ))}
         </ul>
+      ) : null}
+      {tasks.length ? (
+        <div className="mt-1 ml-14">
+          <div className="text-[11px] font-medium tracking-wide text-faint uppercase">Tus tareas para esta reunión</div>
+          {tasks.map((t) => (
+            <MiniRow key={t.s.item.id} s={t.s} note={t.note} />
+          ))}
+        </div>
       ) : null}
       {e.allDay ? null : (
         <div className="mt-1.5 ml-14 flex gap-1.5">
