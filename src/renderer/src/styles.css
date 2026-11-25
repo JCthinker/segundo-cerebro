@@ -195,3 +195,25 @@ h1 {
   list-style: decimal;
   padding-left: 1.3em;
 }
+
+/* Barras de desplazamiento siempre visibles (el Mac las esconde), para poder moverse en horizontal con ratón. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--faint);
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}

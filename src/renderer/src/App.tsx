@@ -158,7 +158,7 @@ export function App() {
               </button>
             </div>
           ) : null}
-          <div className={page === 'notes' ? 'h-full px-8 py-6' : 'mx-auto max-w-5xl px-8 pt-10 pb-6'}>
+          <div className={page === 'notes' ? 'h-full px-8 py-6' : page === 'jira' ? 'px-8 pt-10 pb-6' : 'mx-auto max-w-5xl px-8 pt-10 pb-6'}>
             {isSettings(page) ? (
               <div className="mb-6 flex gap-1 border-b border-line">
                 {SETTINGS_TABS.map((t) => (

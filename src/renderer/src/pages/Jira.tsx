@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { setScreenDetail } from '../screen'
 import { boardList, GROUP_OPTIONS, groupBoard, hiddenColumns, matches, type GroupBy, readAgo, taskReady, type BoardCard, type JiraPrefs, type JiraSnapshot, type JiraTask, type Warning } from '@shared/jira'
 import { JiraCustomize } from '../components/JiraCustomize'
@@ -34,6 +34,8 @@ export function Jira() {
   const savePrefs = (patch: Partial<JiraPrefs>) => data && void call('jira.savePrefs', { ...data.prefs, ...patch })
   const setView = (view: JiraPrefs['view']) => savePrefs({ view })
   const [picking, setPicking] = useState(false)
+  const boardRef = useRef<HTMLDivElement>(null)
+  const slide = (dir: number) => boardRef.current?.scrollBy({ left: dir * 240 * 3, behavior: 'smooth' })
   const [tab, setTab] = useState<Tab>('road')
   const [q, setQ] = useState('')
   const [onlyWarn, setOnlyWarn] = useState(false)
@@ -290,8 +292,18 @@ export function Jira() {
       ) : null}
 
       {tab === 'road' && view === 'board' ? (
-        <div className="-mx-8 overflow-x-auto px-8 pb-4">
-          <div className="flex gap-3">
+        <div>
+          <div className="mb-2 flex justify-end gap-1">
+            <button aria-label="Ver columnas a la izquierda" onClick={() => slide(-1)} className="h-7 w-8 rounded-lg border border-line-strong text-muted hover:text-ink">
+              ◀
+            </button>
+            <button aria-label="Ver columnas a la derecha" onClick={() => slide(1)} className="h-7 w-8 rounded-lg border border-line-strong text-muted hover:text-ink">
+              ▶
+            </button>
+          </div>
+          {/* Altura fija: la barra horizontal queda siempre a la vista, sin bajar hasta el final. */}
+          <div ref={boardRef} className="max-h-[calc(100vh-280px)] min-h-64 overflow-auto pb-2">
+            <div className="flex w-max gap-3">
             {columns.map((col) => (
               <div key={col.id} className="flex w-56 shrink-0 flex-col gap-2">
                 <div className="flex items-center justify-between px-1 text-[12.5px] font-medium">
@@ -322,6 +334,7 @@ export function Jira() {
                 {!col.cards.length ? <div className="rounded-xl border border-dashed border-line px-3 py-4 text-center text-[12px] text-faint">Nada</div> : null}
               </div>
             ))}
+            </div>
           </div>
         </div>
       ) : null}
