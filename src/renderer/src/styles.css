@@ -24,45 +24,34 @@
   --color-success: var(--success);
   --color-success-bg: var(--success-bg);
   --color-info-bg: var(--info-bg);
-  --font-voice: 'JetBrains Mono', ui-monospace, Menlo, monospace;
-  --font-sans: 'JetBrains Mono', ui-monospace, Menlo, monospace;
-  --radius-xs: 0;
-  --radius-sm: 0;
-  --radius-md: 0;
-  --radius-lg: 0;
-  --radius-xl: 0;
-  --radius-2xl: 0;
-  --radius-3xl: 0;
-  --shadow-sm: none;
-  --shadow-md: none;
-  --shadow-lg: none;
-  --shadow-xl: none;
-  --shadow-2xl: none;
+  /* La letra monoespaciada queda solo para títulos y etiquetas; el texto corrido usa la del sistema. */
+  --font-display: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  --font-voice: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
 }
 
 :root {
-  /* Estilo brutalista, como El Crisol: negro, blanco y rojo puro; letra monoespaciada y esquinas rectas. */
-  --page: #000000;
-  --panel: #050505;
-  --raised: #0a0a0a;
-  --line: #262626;
-  --line-strong: #404040;
-  --ink: #ffffff;
-  --muted: #b3b3b3;
-  --faint: #7a7a7a;
-  --hover: rgb(255 255 255 / 0.06);
-  --selected: rgb(255 255 255 / 0.1);
-  --clay: #ff0000;
+  /* Oscuro y sobrio: gris carbón en vez de negro puro, un rojo más suave y sin brillos. */
+  --page: #18181a;
+  --panel: #1e1e21;
+  --raised: #242428;
+  --line: rgb(255 255 255 / 0.08);
+  --line-strong: rgb(255 255 255 / 0.16);
+  --ink: #ececec;
+  --muted: #a8a8ad;
+  --faint: #76767c;
+  --hover: rgb(255 255 255 / 0.05);
+  --selected: rgb(255 255 255 / 0.08);
+  --clay: #e5484d;
   --clay-ink: #ffffff;
-  --accent: #ff3b3b;
-  --danger: #ff4d4d;
-  --danger-bg: #2a0000;
-  --warning: #ffb020;
-  --warning-bg: #2a1c00;
-  --success: #3ddc84;
-  --success-bg: #00240f;
-  --info-bg: #1a1a1a;
-  --glow: 0 0 18px rgb(255 0 0 / 0.55);
+  --accent: #f07a7d;
+  --danger: #f2777a;
+  --danger-bg: #3a1a1c;
+  --warning: #f0b45a;
+  --warning-bg: #33280f;
+  --success: #6fcf97;
+  --success-bg: #14301f;
+  --info-bg: #26262b;
   color-scheme: dark;
 }
 
@@ -76,8 +65,8 @@ body {
   margin: 0;
   background: var(--page);
   color: var(--ink);
-  font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace;
-  font-size: 13px;
+  font-family: var(--font-sans);
+  font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
@@ -109,16 +98,14 @@ body {
   outline-offset: 1px;
 }
 
-/* Títulos gruesos y apretados; el rojo brilla como en El Crisol. */
+/* Títulos con la letra monoespaciada, como guiño al estilo anterior, pero sin gritar. */
 h1 {
-  font-weight: 700 !important;
-  letter-spacing: -0.03em !important;
-}
-.text-clay {
-  text-shadow: var(--glow);
+  font-family: var(--font-display);
+  font-weight: 600 !important;
+  letter-spacing: -0.02em !important;
 }
 ::selection {
-  background: var(--clay);
+  background: rgb(229 72 77 / 0.45);
   color: #fff;
 }
 
@@ -173,7 +160,7 @@ h1 {
 }
 .tiptap code {
   background: var(--hover);
-  border-radius: 0;
+  border-radius: 4px;
   padding: 0.1em 0.3em;
   font-size: 0.9em;
 }
